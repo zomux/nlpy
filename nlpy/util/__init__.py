@@ -8,6 +8,16 @@ import os
 
 NLPY_ROOT = os.path.dirname(os.path.dirname(__file__))
 
-RESOURCE_ROOT = NLPY_ROOT + os.sep + "resources"
-EXTERNAL_RESOURCE_ROOT = NLPY_ROOT + os.sep + "resources"
+_INTERNAL_RESOURCE_ROOT = NLPY_ROOT + os.sep + 'resources'
 
+_EXTERNAL_RESOURCE_ROOT = _INTERNAL_RESOURCE_ROOT
+if 'NLPY_EXTERNAL_RESOURCE' in os.environ:
+    _EXTERNAL_RESOURCE_ROOT = os.environ['NLPY_EXTERNAL_RESOURCE']
+elif 'HOME' in os.environ:
+    _EXTERNAL_RESOURCE_ROOT = os.path.join(os.environ['HOME'], '.nlpy_external_resources')
+
+def internal_resource(path):
+    return os.path.join(_INTERNAL_RESOURCE_ROOT, path.replace('/', os.sep))
+
+def external_resource(path):
+    return os.path.join(_EXTERNAL_RESOURCE_ROOT, path.replace('/', os.sep))

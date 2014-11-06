@@ -23,10 +23,10 @@ setup(
     url='http://nlpy.org',
     download_url='http://pypi.python.org/pypi/nlpy',
 
-    keywords='Natural Language Processing'
-        'Natural Language Understanding'
-        'Semantic Representation'
-        'Machine Translation',
+    keywords=' Natural Language Processing '
+        ' Natural Language Understanding '
+        ' Semantic Representation '
+        ' Machine Translation ',
 
     license='LGPL',
     platforms='any',
@@ -48,10 +48,12 @@ setup(
     ],
 
     setup_requires = [
-        'numpy >= 1.3'
+        'numpy >= 1.3',
+        'gensim >= 0.10.0'
     ],
     install_requires=[
         'numpy >= 1.3',
+        'gensim >= 0.10.0'
     ],
 
     extras_require={
