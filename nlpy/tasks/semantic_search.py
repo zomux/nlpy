@@ -11,7 +11,7 @@ from nlpy.ex.keyword import DefaultKeywordExtractor
 from nlpy.basic import DefaultLemmatizer
 from nlpy.basic import DefaultRecaser
 
-class ShortTextSearcher(object):
+class SemanticSearcher(object):
 
     def __init__(self, tokenizer=None, vec=None):
         self._vec = vec if vec else Word2VecRepresentation()
@@ -71,10 +71,10 @@ class ShortTextSearcher(object):
 
     def _lemmatized_keywords(self, sent):
         keywords = self._kwex.extract_weighted(
-            map(self._recaser.recase,
-                map(self._lem.lemmatize,
-                    map(str.lower,
-                        self._tokenizer.tokenize(sent))))
+                map(self._recaser.recase,
+                    map(self._lem.lemmatize,
+                        map(str.lower,
+                            self._tokenizer.tokenize(sent))))
             )
         return keywords
 

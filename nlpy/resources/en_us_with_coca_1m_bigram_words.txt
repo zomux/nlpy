@@ -73,6 +73,7 @@
 2701	only
 2591	any
 2569	just
+2568	want
 2450	Mr.
 2447	now
 2439	A
@@ -110,7 +111,6 @@
 1708	without
 1680	did
 1674	off
-1644	American
 1639	another
 1586	both
 1581	own
@@ -346,6 +346,7 @@
 514	yet
 514	six
 512	care
+512	American
 510	top
 509	parents
 509	individual
@@ -521,7 +522,6 @@
 394	green
 394	For
 393	everyone
-392	want
 391	reported
 391	form
 391	father

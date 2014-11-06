@@ -13,7 +13,7 @@ class FrequencyKeywordExtractor:
 
     def __init__(self):
         self._build_freqmap()
-        self._threshold = 500
+        self._threshold = 600
 
     def _build_freqmap(self):
         self._freqmap = {}
@@ -49,12 +49,17 @@ class FrequencyKeywordExtractor:
         :rtype: list of (str, float)
         """
         keywords = self.extract(words)
-        freqs = map(lambda w: self._freqmap[w], keywords)
-        total = sum(freqs)
-        if len(keywords) > 1:
-            scores = map(lambda f: 1 - float(f / total), freqs)
-        else:
+        if len(keywords) <= 1:
             scores = [1.0] * len(keywords)
+        else:
+            freqs = map(lambda w: self._freqmap[w], keywords)
+            total = sum(freqs)
+            ratios = map(lambda f: float(f) / total, freqs)
+            average = sum(ratios) / len(keywords)
+
+            scores = map(lambda r: 2 * average - r, ratios)
+
+
         return zip(keywords, scores)
 
 
