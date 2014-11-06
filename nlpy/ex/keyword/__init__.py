@@ -4,6 +4,6 @@
 # Copyright (C) 2015 NLPY.ORG
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
-from FrequencyKeywordExtractor import FrequencyKeywordExtractor
+from frequency_keyword_extractor import FrequencyKeywordExtractor
 
 DefaultKeywordExtractor = FrequencyKeywordExtractor

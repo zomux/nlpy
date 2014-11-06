@@ -14,5 +14,5 @@ class Word2VecRepresentationTest(unittest.TestCase):
 
     def test_find_similar_words(self):
         testcase = "China"
-        most_similiar = self.rep.find_similar_words(testcase)[0]
+        most_similiar = self.rep.similar_words(testcase)[0]
         self.assertEqual(most_similiar, "Chinese")

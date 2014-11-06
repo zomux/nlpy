@@ -35,6 +35,26 @@ class FrequencyKeywordExtractor:
         :rtype: list of str
         """
         keywords = filter(lambda w: w in self._freqmap and self._freqmap[w] < self._threshold, words)
+        # No anything there? raise the threshold by 2x
+        if not keywords:
+            keywords = filter(lambda w: w in self._freqmap and self._freqmap[w] < self._threshold * 2, words)
+
         keywords.sort(key=lambda w: self._freqmap[w])
         return keywords
+
+    def extract_weighted(self, words):
+        """
+        Extract with weights
+        :param words: words
+        :rtype: list of (str, float)
+        """
+        keywords = self.extract(words)
+        freqs = map(lambda w: self._freqmap[w], keywords)
+        total = sum(freqs)
+        if len(keywords) > 1:
+            scores = map(lambda f: 1 - float(f / total), freqs)
+        else:
+            scores = [1.0] * len(keywords)
+        return zip(keywords, scores)
+
 
