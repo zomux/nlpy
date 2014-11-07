@@ -16,3 +16,10 @@ class NLTKEnglishTokenizer(AbstractTokenizer):
         """
         return nltk.word_tokenize(sent)
 
+    @staticmethod
+    def serve(param):
+        """
+        For serve web requests.
+        """
+        output = NLTKEnglishTokenizer().tokenize(param['input'])
+        return {"output": output}

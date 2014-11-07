@@ -78,5 +78,16 @@ class SemanticSearcher(object):
             )
         return keywords
 
+    @staticmethod
+    def serve(param):
+        from nlpy.util import external_resource
+        from nlpy.util import LineIterator
+        global semantic_searcher
+        if "semantic_searcher" not in globals():
+            print "Loading searcher ..."
+            data = LineIterator(external_resource("general/elementary_questions.txt"))
+            semantic_searcher = SemanticSearcher()
+            semantic_searcher.load_data(data)
+        return {"output": semantic_searcher.search(param['input'].encode('utf-8'))}
 
 

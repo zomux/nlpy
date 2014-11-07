@@ -62,4 +62,9 @@ class FrequencyKeywordExtractor:
 
         return zip(keywords, scores)
 
+    @staticmethod
+    def serve(param):
+        from nlpy.basic import DefaultTokenizer
+        output = FrequencyKeywordExtractor().extract(DefaultTokenizer().tokenize(param["input"]))
+        return {"output": output}
 

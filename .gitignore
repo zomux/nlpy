@@ -44,6 +44,7 @@ Thumbs.db
 .settings/
 docs/src/_build/
 docs/_static
+.nfs*
 *,cover
 .idea
 *.dict
