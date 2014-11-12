@@ -82,12 +82,23 @@ class SemanticSearcher(object):
     def serve(param):
         from nlpy.util import external_resource
         from nlpy.util import LineIterator
+        import urllib2
         global semantic_searcher
         if "semantic_searcher" not in globals():
             print "Loading searcher ..."
             data = LineIterator(external_resource("general/elementary_questions.txt"))
             semantic_searcher = SemanticSearcher()
             semantic_searcher.load_data(data)
-        return {"output": semantic_searcher.search(param['input'].encode('utf-8'))}
+
+        caches = set()
+        if "caches" in param:
+            caches = set(urllib2.unquote(param["caches"]).split(" ||| "))
+        print caches
+        output = ""
+        for _, result in semantic_searcher.searchMany(param['input'].encode('utf-8')):
+            if result not in caches:
+                output = result
+                break
+        return {"output": output}
 
 
