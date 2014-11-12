@@ -1,0 +1,24 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# Copyright (C) 2015 NLPY.ORG
+# Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
+
+from nlpy.dataset import AbstractDataset
+from nlpy.util import FeatureContainer, internal_resource
+
+class HeartScaleDataset(AbstractDataset):
+
+    def __init__(self):
+        feature = FeatureContainer(internal_resource("dataset/heart_scale.txt"))
+        self.data = feature.data
+        self.targets = feature.targets
+
+    def train_set(self):
+        return self.data[:150], self.targets[:150]
+
+    def valid_set(self):
+        return self.data[150:200], self.targets[150:200]
+
+    def test_set(self):
+        return self.data[200:], self.targets[200:]

@@ -7,7 +7,7 @@
 import os
 from nlpy.util import internal_resource
 
-_FREQUENCY_DATA_PATH = internal_resource("en_us_with_coca_1m_bigram_words.txt")
+_FREQUENCY_DATA_PATH = internal_resource("general/en_us_with_coca_1m_bigram_words.txt")
 
 class FrequencyKeywordExtractor:
 
