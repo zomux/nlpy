@@ -5,3 +5,4 @@
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
 from semantic_search import SemanticSearcher
+from keyword_extraction import KeywordExtractor

@@ -63,9 +63,9 @@ def runner(class_name):
 
     param = {}
     for k in request.form:
-        param[k] = request.form[k]
+        param[k] = request.form[k].encode('utf-8')
     for k in request.args:
-        param[k] = request.args[k]
+        param[k] = request.args[k].encode('utf-8')
 
     return json.dumps(mod.serve(param))
 
