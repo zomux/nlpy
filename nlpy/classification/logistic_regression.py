@@ -16,10 +16,10 @@ logging = logging.getLogger(__name__)
 class LogisticRegression(object):
 
     def __init__(self, input_n=0, output_n=0, batch_size=1000, learning_rate=0.13, improvement_threshold=0.995,
-                 max_epochs=1000):
+                 max_epochs=1000, x=None, y=None):
         # Theano variables
-        self._x = T.matrix("x")
-        self._y = T.ivector("y")
+        self._x = T.matrix("x") if not x else x
+        self._y = T.ivector("y") if not y else y
         # Prediction functions
         self.input_n = input_n
         self.output_n = output_n

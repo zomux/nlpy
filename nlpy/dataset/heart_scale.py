@@ -6,19 +6,28 @@
 
 from nlpy.dataset import AbstractDataset
 from nlpy.util import FeatureContainer, internal_resource
+import numpy as np
 
 class HeartScaleDataset(AbstractDataset):
 
-    def __init__(self):
+    def __init__(self, single_target=True):
         feature = FeatureContainer(internal_resource("dataset/heart_scale.txt"))
         self.data = feature.data
         self.targets = feature.targets
+        self.single_target = single_target
+
+    def _target_map(self, i):
+        if self.single_target:
+            return i
+        l = [0., 0.]
+        l[i] = 1.
+        return l
 
     def train_set(self):
-        return self.data[:150], self.targets[:150]
+        return self.data[:150], np.array(map(self._target_map, self.targets[:150]))
 
     def valid_set(self):
-        return self.data[150:200], self.targets[150:200]
+        return self.data[150:200], np.array(map(self._target_map, self.targets[150:200]))
 
     def test_set(self):
-        return self.data[200:], self.targets[200:]
+        return self.data[200:], np.array(map(self._target_map, self.targets[200:]))

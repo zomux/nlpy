@@ -7,7 +7,7 @@
 from nlpy.util import internal_resource, LineIterator
 
 # The freq data here is required to be sorted in the reverse order of frequency.
-_FREQ_DATA_PATH = internal_resource("en_us_with_coca_1m_bigram_words.txt")
+_FREQ_DATA_PATH = internal_resource("general/en_us_with_coca_1m_bigram_words.txt")
 
 class FreqRecaser(object):
 

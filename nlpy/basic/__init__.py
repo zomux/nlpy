@@ -7,6 +7,7 @@
 from abstract_tokenizer import AbstractTokenizer
 from nltk_tokenizers import NLTKEnglishTokenizer
 from nltk_lemmatizer import NLTKEnglishLemmatizer
+from contentfulness import ContentfullnessEstimator
 from recase import FreqRecaser
 
 DefaultTokenizer = NLTKEnglishTokenizer
