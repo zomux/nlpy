@@ -179,7 +179,8 @@ class LogisticRegression(object):
                 'with test performance %f %%',
              best_validation_loss * 100., test_score * 100.
         )
-        logging.info('The code run for %d epochs, with %f epochs/sec',
+        if end_time > start_time:
+            logging.info('The code run for %d epochs, with %f epochs/sec',
                      epoch, 1. * epoch / (end_time - start_time))
         logging.info('The code for file ' +
                               os.path.split(__file__)[1] +

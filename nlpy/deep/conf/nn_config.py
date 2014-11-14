@@ -7,18 +7,26 @@
 
 class NetworkConfig(object):
 
-    def __init__(self):
-        self.layers = [3,2,1]
-        self.tied_weights = False
-        self.decode_from = 1
+    def __init__(self, input_size):
+        """
+        Create a config for neural network
+        :param input_size: size of input vector
+        :return:
+        """
+        self.input_size = input_size
+        # :type: list of nlpy.deep.NeuralLayer
+        self.layers = []
         self.no_learn_biases = False
 
-        # Activation
-        self.hidden_activation = "sigmoid"
-        self.output_activation = "softmax"
+
+        # Regularization
+        self.weight_l1 = 0
+        self.weight_l2 = 0
+        self.hidden_l1 = 0
+        self.hidden_l2 = 0
+        self.contractive_l2 = 0
+
 
         # Noise
         self.input_noise = 0.
         self.input_dropouts = 0.
-        self.hidden_noise = 0.
-        self.hidden_dropouts = 0.

@@ -19,15 +19,15 @@ class Regressor(Network):
         super(Regressor, self).setup_vars()
 
         # the k variable holds the target output for input x.
-        self.k = T.matrix('k')
+        self.vars.k = T.matrix('k')
 
     @property
     def inputs(self):
-        return [self.x, self.k]
+        return [self.vars.x, self.vars.k]
 
     @property
     def cost(self):
-        err = self.y - self.k
+        err = self.vars.y - self.vars.k
         return T.mean((err * err).sum(axis=1))
 
 
@@ -72,9 +72,9 @@ class FeedForwardTest(unittest.TestCase):
     def test(self):
         from nlpy.dataset import HeartScaleDataset
         from nlpy.deep.conf import NetworkConfig
-        conf = NetworkConfig()
-        conf.layers = (13,10,2)
-        conf.hidden_activation = "softmax"
+        from nlpy.deep import NeuralLayer
+        conf = NetworkConfig(input_size=13)
+        conf.layers = [NeuralLayer(10), NeuralLayer(2, 'softmax')]
         ff = Regressor(conf)
         t = SGD(ff)
         train_set = [(np.array([[1,2,3,4,5,6,7,8,9,10,11,12,13]]), np.array([[1,0]]))]
