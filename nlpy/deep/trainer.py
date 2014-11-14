@@ -14,7 +14,7 @@ import theano
 import theano.tensor as TT
 import sys
 
-from . import feed_forward
+from . import basic_nn
 
 logging = climate.get_logger(__name__)
 
@@ -112,11 +112,11 @@ class Trainer(object):
         raise NotImplementedError
 
 
-class SGD(Trainer):
+class SGDTrainer(Trainer):
     '''Stochastic gradient descent network trainer.'''
 
     def __init__(self, network, **kwargs):
-        super(SGD, self).__init__(network, **kwargs)
+        super(SGDTrainer, self).__init__(network, **kwargs)
 
         self.momentum = kwargs.get('momentum', 0.9)
         self.learning_rate = kwargs.get('learning_rate', 1e-4)
@@ -168,7 +168,7 @@ class SGD(Trainer):
         return self.f_learn(*x)
 
 
-class NAG(SGD):
+class NAG(SGDTrainer):
     '''Optimize using Nesterov's Accelerated Gradient (NAG).
     The basic difference between NAG and "classical" momentum in SGD
     optimization approaches is that NAG computes the gradients at the position
@@ -242,7 +242,7 @@ class NAG(SGD):
         return self.f_learn(*x)
 
 
-class Rprop(SGD):
+class Rprop(SGDTrainer):
     '''Trainer for neural nets using resilient backpropagation.
     The Rprop method uses the same general strategy as SGD (both methods are
     make small parameter adjustments using local derivative information). The
@@ -295,7 +295,7 @@ class Rprop(SGD):
             yield step_tm1, step
 
 
-class RmsProp(SGD):
+class RmsProp(SGDTrainer):
     '''RmsProp trains neural network models using scaled SGD.
     The Rprop method uses the same general strategy as SGD (both methods are
     make small parameter adjustments using local derivative information). The

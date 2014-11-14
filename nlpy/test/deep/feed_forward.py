@@ -5,33 +5,16 @@
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
 import unittest
-from nlpy.deep.feed_forward import Network
-from nlpy.deep.trainer import SGD
+from nlpy.deep.basic_nn import NeuralNetwork, Regressor
+from nlpy.deep.trainer import SGDTrainer
 
 import theano
 import theano.tensor as T
 import numpy as np
 
-class Regressor(Network):
-    '''A regressor attempts to produce a target output.'''
-
-    def setup_vars(self):
-        super(Regressor, self).setup_vars()
-
-        # the k variable holds the target output for input x.
-        self.vars.k = T.matrix('k')
-
-    @property
-    def inputs(self):
-        return [self.vars.x, self.vars.k]
-
-    @property
-    def cost(self):
-        err = self.vars.y - self.vars.k
-        return T.mean((err * err).sum(axis=1))
 
 
-class Classifier(Network):
+class Classifier(NeuralNetwork):
     '''A classifier attempts to match a 1-hot target output.'''
 
     def __init__(self, **kwargs):
@@ -76,7 +59,7 @@ class FeedForwardTest(unittest.TestCase):
         conf = NetworkConfig(input_size=13)
         conf.layers = [NeuralLayer(10), NeuralLayer(2, 'softmax')]
         ff = Regressor(conf)
-        t = SGD(ff)
+        t = SGDTrainer(ff)
         train_set = [(np.array([[1,2,3,4,5,6,7,8,9,10,11,12,13]]), np.array([[1,0]]))]
         a = [HeartScaleDataset(single_target=False).train_set()]
         b = [HeartScaleDataset(single_target=False).valid_set()]

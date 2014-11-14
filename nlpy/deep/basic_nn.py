@@ -19,7 +19,7 @@ from functions import VarMap
 import nnprocessors
 
 
-class Network(object):
+class NeuralNetwork(object):
 
     def __init__(self, config):
         """
@@ -36,19 +36,17 @@ class Network(object):
         self.layers = config.layers
 
         self.setup_vars()
-        self.vars.y, count = self.setup_encoder()
+        self.vars.y, count = self.setup_layers()
 
         logging.info('%d total network parameters', count)
 
     def setup_vars(self):
-        '''Setup Theano variables for our network.'''
-        # x is a proxy for our network's input, and y for its output.
         self.vars.x = T.matrix('x')
 
-    def setup_encoder(self):
+    def setup_layers(self):
         last_size = self.config.input_size
         parameter_count = 0
-        x = z = nnprocessors.add_noise(
+        z = nnprocessors.add_noise(
             self.vars.x,
             self.config.input_noise,
             self.config.input_dropouts)
@@ -107,24 +105,6 @@ class Network(object):
 
 
     def J(self):
-        '''Return a variable representing the cost or loss for this network.
-        Parameters
-        ----------
-        weight_l1 : float, optional
-            Regularize the L1 norm of unit connection weights by this constant.
-        weight_l2 : float, optional
-            Regularize the L2 norm of unit connection weights by this constant.
-        hidden_l1 : float, optional
-            Regularize the L1 norm of hidden unit activations by this constant.
-        hidden_l2 : float, optional
-            Regularize the L2 norm of hidden unit activations by this constant.
-        contractive_l2 : float, optional
-            Regularize model using the Frobenius norm of the hidden Jacobian.
-        Returns
-        -------
-        Theano variable
-            A variable representing the overall cost value of this network.
-        '''
         cost = self.cost
         if self.config.weight_l1 > 0:
             cost += self.config.weight_l1 * sum(abs(w).sum() for w in self.weights)
@@ -138,3 +118,21 @@ class Network(object):
             cost += self.config.contractive_l2 * sum(
                 T.sqr(T.grad(h.mean(axis=0).sum(), self.vars.x)).sum() for h in self.hiddens)
         return cost
+
+class Regressor(NeuralNetwork):
+    '''A regressor attempts to produce a target output.'''
+
+    def setup_vars(self):
+        super(Regressor, self).setup_vars()
+
+        # the k variable holds the target output for input x.
+        self.vars.k = T.matrix('k')
+
+    @property
+    def inputs(self):
+        return [self.vars.x, self.vars.k]
+
+    @property
+    def cost(self):
+        err = self.vars.y - self.vars.k
+        return T.mean((err * err).sum(axis=1))
