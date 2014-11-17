@@ -4,5 +4,8 @@
 # Copyright (C) 2015 NLPY.ORG
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
-from layer import NeuralLayer
-from basic_nn import NeuralNetwork, Regressor
+from nlpy.deep.networks.layer import NeuralLayer
+from nlpy.deep.networks.basic_nn import NeuralNetwork
+from nlpy.deep.networks.regressor import NeuralRegressor
+from nlpy.deep.networks.classifier import NeuralClassifier
+from nlpy.deep.trainers import NeuralTrainer, SGDTrainer

@@ -6,17 +6,16 @@
 #
 # Some codes in this file are refactored from theanonets
 
-import theano.tensor as T
 import logging as loggers
-import theano
 
-from layer import NeuralLayer
+import theano.tensor as T
+import theano
 
 
 logging = loggers.getLogger(__name__)
 
-from functions import VarMap
-import nnprocessors
+from nlpy.deep.functions import VarMap
+from nlpy.deep import nnprocessors
 
 
 class NeuralNetwork(object):
@@ -38,7 +37,7 @@ class NeuralNetwork(object):
         self.setup_vars()
         self.vars.y, count = self.setup_layers()
 
-        logging.info('%d total network parameters', count)
+        logging.info("total network parameters: %d", count)
 
     def setup_vars(self):
         self.vars.x = T.matrix('x')
@@ -104,35 +103,17 @@ class NeuralNetwork(object):
     __call__ = predict
 
 
-    def J(self):
+    def J(self, train_conf):
         cost = self.cost
-        if self.config.weight_l1 > 0:
-            cost += self.config.weight_l1 * sum(abs(w).sum() for w in self.weights)
-        if self.config.weight_l2 > 0:
-            cost += self.config.weight_l2 * sum((w * w).sum() for w in self.weights)
-        if self.config.hidden_l1 > 0:
-            cost += self.config.hidden_l1 * sum(abs(h).mean(axis=0).sum() for h in self.hiddens)
-        if self.config.hidden_l2 > 0:
-            cost += self.config.hidden_l2 * sum((h * h).mean(axis=0).sum() for h in self.hiddens)
-        if self.config.contractive_l2 > 0:
-            cost += self.config.contractive_l2 * sum(
+        if train_conf.weight_l1 > 0:
+            cost += train_conf.weight_l1 * sum(abs(w).sum() for w in self.weights)
+        if train_conf.weight_l2 > 0:
+            cost += train_conf.weight_l2 * sum((w * w).sum() for w in self.weights)
+        if train_conf.hidden_l1 > 0:
+            cost += train_conf.hidden_l1 * sum(abs(h).mean(axis=0).sum() for h in self.hiddens)
+        if train_conf.hidden_l2 > 0:
+            cost += train_conf.hidden_l2 * sum((h * h).mean(axis=0).sum() for h in self.hiddens)
+        if train_conf.contractive_l2 > 0:
+            cost += train_conf.contractive_l2 * sum(
                 T.sqr(T.grad(h.mean(axis=0).sum(), self.vars.x)).sum() for h in self.hiddens)
         return cost
-
-class Regressor(NeuralNetwork):
-    '''A regressor attempts to produce a target output.'''
-
-    def setup_vars(self):
-        super(Regressor, self).setup_vars()
-
-        # the k variable holds the target output for input x.
-        self.vars.k = T.matrix('k')
-
-    @property
-    def inputs(self):
-        return [self.vars.x, self.vars.k]
-
-    @property
-    def cost(self):
-        err = self.vars.y - self.vars.k
-        return T.mean((err * err).sum(axis=1))

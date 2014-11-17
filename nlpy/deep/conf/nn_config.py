@@ -18,15 +18,6 @@ class NetworkConfig(object):
         self.layers = []
         self.no_learn_biases = False
 
-
-        # Regularization
-        self.weight_l1 = 0
-        self.weight_l2 = 0
-        self.hidden_l1 = 0
-        self.hidden_l2 = 0
-        self.contractive_l2 = 0
-
-
         # Noise
         self.input_noise = 0.
         self.input_dropouts = 0.

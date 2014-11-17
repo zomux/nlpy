@@ -5,4 +5,4 @@
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
 from nn_config import NetworkConfig
-from runtime_config import RuntimeConfig
+from trainer_config import TrainerConfig

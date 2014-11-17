@@ -11,6 +11,7 @@ import sys, os
 import gzip
 import urllib
 import cPickle
+import numpy as np
 
 logging = logging.getLogger(__name__)
 
@@ -18,7 +19,9 @@ MNIST_URL = "http://deeplearning.net/data/mnist/mnist.pkl.gz"
 
 class MnistDataset(AbstractDataset):
 
-    def __init__(self):
+    def __init__(self, target_format=None):
+        super(MnistDataset, self).__init__(target_format)
+        self._target_size = 10
         logging.info("loading minst data")
         path = os.path.join(tempfile.gettempdir(), "mnist.pkl.gz")
         if not os.path.exists(path):
@@ -27,10 +30,13 @@ class MnistDataset(AbstractDataset):
         self._train_set, self._valid_set, self._test_set = cPickle.load(gzip.open(path, 'rb'))
 
     def train_set(self):
-        return self._train_set
+        data, target = self._train_set
+        return [(data,  np.array(map(self._target_map, target)))]
 
     def valid_set(self):
-        return self._valid_set
+        data, target = self._valid_set
+        return [(data,  np.array(map(self._target_map, target)))]
 
     def test_set(self):
-        return self._test_set
+        data, target = self._test_set
+        return [(data,  np.array(map(self._target_map, target)))]

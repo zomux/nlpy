@@ -8,8 +8,7 @@ from nlpy.classification import LogisticRegression
 
 if __name__ == '__main__':
     from nlpy.dataset import MnistDataset
-    from nlpy.dataset import HeartScaleDataset
     import logging
     logging.basicConfig(level=logging.DEBUG)
     lr = LogisticRegression(batch_size=10)
-    lr.train(HeartScaleDataset())
+    lr.train(MnistDataset())

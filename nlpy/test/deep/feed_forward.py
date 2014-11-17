@@ -5,50 +5,14 @@
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
 import unittest
-from nlpy.deep.basic_nn import NeuralNetwork, Regressor
-from nlpy.deep.trainer import SGDTrainer
 
-import theano
 import theano.tensor as T
 import numpy as np
+from nlpy.deep import NeuralRegressor
 
+from nlpy.deep.networks.basic_nn import NeuralNetwork
+from nlpy.deep.trainers.trainer import SGDTrainer
 
-
-class Classifier(NeuralNetwork):
-    '''A classifier attempts to match a 1-hot target output.'''
-
-    def __init__(self, **kwargs):
-        kwargs['output_activation'] = 'softmax'
-        super(Classifier, self).__init__(**kwargs)
-
-    def setup_vars(self):
-        super(Classifier, self).setup_vars()
-
-        # for a classifier, k specifies the correct labels for a given input.
-        self.k = T.ivector('k')
-
-    @property
-    def inputs(self):
-        return [self.x, self.k]
-
-    @property
-    def cost(self):
-        return -T.mean(T.log(self.y)[T.arange(self.k.shape[0]), self.k])
-
-    @property
-    def accuracy(self):
-        '''Compute the percent correct classifications.'''
-        return 100 * T.mean(T.eq(T.argmax(self.y, axis=1), self.k))
-
-    @property
-    def monitors(self):
-        yield 'acc', self.accuracy
-        for i, h in enumerate(self.hiddens):
-            yield 'h{}<0.1'.format(i+1), 100 * (abs(h) < 0.1).mean()
-            yield 'h{}<0.9'.format(i+1), 100 * (abs(h) < 0.9).mean()
-
-    def classify(self, x):
-        return self.predict(x).argmax(axis=1)
 
 class FeedForwardTest(unittest.TestCase):
 
@@ -56,12 +20,19 @@ class FeedForwardTest(unittest.TestCase):
         from nlpy.dataset import HeartScaleDataset
         from nlpy.deep.conf import NetworkConfig
         from nlpy.deep import NeuralLayer
+        import logging
+        logging.basicConfig(level=logging.INFO)
         conf = NetworkConfig(input_size=13)
-        conf.layers = [NeuralLayer(10), NeuralLayer(2, 'softmax')]
-        ff = Regressor(conf)
+        conf.layers = [NeuralLayer(10), NeuralLayer(5), NeuralLayer(1, 'linear')]
+        ff = NeuralRegressor(conf)
         t = SGDTrainer(ff)
         train_set = [(np.array([[1,2,3,4,5,6,7,8,9,10,11,12,13]]), np.array([[1,0]]))]
-        a = [HeartScaleDataset(single_target=False).train_set()]
-        b = [HeartScaleDataset(single_target=False).valid_set()]
+        a = [HeartScaleDataset(single_target=True).train_set()]
+        b = [HeartScaleDataset(single_target=True).valid_set()]
         for k in list(t.train(a, b)):
-            print k
+            pass
+        print k
+
+
+if __name__ == '__main__':
+    unittest.main()

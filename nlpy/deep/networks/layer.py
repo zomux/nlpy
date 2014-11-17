@@ -7,8 +7,8 @@
 import numpy as np
 import theano
 import theano.tensor as T
-from functions import FLOATX
-import nnprocessors
+from nlpy.deep.functions import FLOATX
+from nlpy.deep import nnprocessors
 import logging as loggers
 
 logging = loggers.getLogger(__name__)

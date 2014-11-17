@@ -7,5 +7,6 @@
 from abstract_dataset import AbstractDataset
 from heart_scale import HeartScaleDataset
 from mnist import MnistDataset
+from mini_batch import MiniBatches
 
 Dataset = AbstractDataset

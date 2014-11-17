@@ -4,169 +4,11 @@
 # Copyright (C) 2015 NLPY.ORG
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
-
-import climate
-import itertools
-import numpy as np
-import numpy.random as rng
-import scipy.optimize
+from trainer import SGDTrainer, NeuralTrainer
+import logging
 import theano
-import theano.tensor as TT
-import sys
-
-from . import basic_nn
-
-logging = climate.get_logger(__name__)
-
-
-def default_mapper(f, dataset, *args, **kwargs):
-    '''Apply a function to each element of a dataset.'''
-    return [f(x, *args, **kwargs) for x in dataset]
-
-
-def ipcluster_mapper(client):
-    '''Get a mapper from an IPython.parallel cluster client.'''
-    view = client.load_balanced_view()
-    def mapper(f, dataset, *args, **kwargs):
-        def ff(x):
-            return f(x, *args, **kwargs)
-        return view.map(ff, dataset).get()
-    return mapper
-
-
-class Trainer(object):
-    '''This is a base class for all trainers.'''
-
-    def __init__(self, network, **kwargs):
-        super(Trainer, self).__init__()
-
-        self.params = network.params(**kwargs)
-
-        self.J = network.J(**kwargs)
-        self.cost_exprs = [self.J]
-        self.cost_names = ['J']
-        for name, monitor in network.monitors:
-            self.cost_names.append(name)
-            self.cost_exprs.append(monitor)
-
-        logging.info('compiling evaluation function')
-        self.f_eval = theano.function(
-            network.inputs, self.cost_exprs, updates=network.updates)
-
-        self.validation_frequency = kwargs.get('validate', 10)
-        self.min_improvement = kwargs.get('min_improvement', 0.)
-        self.patience = kwargs.get('patience', 100)
-
-        self.shapes = [p.get_value(borrow=True).shape for p in self.params]
-        self.counts = [np.prod(s) for s in self.shapes]
-        self.starts = np.cumsum([0] + self.counts)[:-1]
-        self.dtype = self.params[0].get_value().dtype
-
-        self.best_cost = 1e100
-        self.best_iter = 0
-        self.best_params = [p.get_value().copy() for p in self.params]
-
-    def flat_to_arrays(self, x):
-        x = x.astype(self.dtype)
-        return [x[o:o+n].reshape(s) for s, o, n in
-                zip(self.shapes, self.starts, self.counts)]
-
-    def arrays_to_flat(self, arrays):
-        x = np.zeros((sum(self.counts), ), self.dtype)
-        for arr, o, n in zip(arrays, self.starts, self.counts):
-            x[o:o+n] = arr.ravel()
-        return x
-
-    def set_params(self, targets):
-        for param, target in zip(self.params, targets):
-            param.set_value(target)
-
-    def evaluate(self, iteration, valid_set):
-        '''Evaluate the current model using a validation set.
-        Parameters
-        ----------
-        valid_set : theanets.Dataset
-            A set of data to use for evaluating the model. Typically this is
-            distinct from the training (and testing) data.
-        Returns
-        -------
-        True iff there was sufficient improvement compared with the last call to
-        evaluate.
-        '''
-        costs = list(zip(
-            self.cost_names,
-            np.mean([self.f_eval(*x) for x in valid_set], axis=0)))
-        marker = ''
-        # this is the same as: (J_i - J_f) / J_i > min improvement
-        _, J = costs[0]
-        if self.best_cost - J > self.best_cost * self.min_improvement:
-            self.best_cost = J
-            self.best_iter = iteration
-            self.best_params = [p.get_value().copy() for p in self.params]
-            marker = ' *'
-        info = ' '.join('%s=%.2f' % el for el in costs)
-        logging.info('validation %i %s%s', iteration + 1, info, marker)
-        return iteration - self.best_iter < self.patience
-
-    def train(self, train_set, valid_set=None, **kwargs):
-        raise NotImplementedError
-
-
-class SGDTrainer(Trainer):
-    '''Stochastic gradient descent network trainer.'''
-
-    def __init__(self, network, **kwargs):
-        super(SGDTrainer, self).__init__(network, **kwargs)
-
-        self.momentum = kwargs.get('momentum', 0.9)
-        self.learning_rate = kwargs.get('learning_rate', 1e-4)
-
-        logging.info('compiling %s learning function', self.__class__.__name__)
-        self.f_learn = theano.function(
-            network.inputs,
-            self.cost_exprs,
-            updates=list(network.updates) + list(self.learning_updates()))
-
-    def learning_updates(self):
-        for param in self.params:
-            delta = self.learning_rate * TT.grad(self.J, param)
-            velocity = theano.shared(
-                np.zeros_like(param.get_value()), name=param.name + '_vel')
-            yield velocity, self.momentum * velocity - delta
-            yield param, param + velocity
-
-    def train(self, train_set, valid_set=None, **kwargs):
-        '''We train over mini-batches and evaluate periodically.'''
-        iteration = 0
-        while True:
-            if not iteration % self.validation_frequency:
-                try:
-                    if not self.evaluate(iteration, valid_set):
-                        logging.info('patience elapsed, bailing out')
-                        break
-                except KeyboardInterrupt:
-                    logging.info('interrupted!')
-                    break
-
-            try:
-                costs = list(zip(
-                    self.cost_names,
-                    np.mean([self.train_minibatch(*x) for x in train_set], axis=0)))
-            except KeyboardInterrupt:
-                logging.info('interrupted!')
-                break
-
-            info = ' '.join('%s=%.2f' % el for el in costs)
-            logging.info('%s %i %s', self.__class__.__name__, iteration + 1, info)
-            iteration += 1
-
-            yield dict(costs)
-
-        self.set_params(self.best_params)
-
-    def train_minibatch(self, *x):
-        return self.f_learn(*x)
-
+import numpy as np
+import theano.tensor as T
 
 class NAG(SGDTrainer):
     '''Optimize using Nesterov's Accelerated Gradient (NAG).
@@ -239,7 +81,7 @@ class NAG(SGDTrainer):
 
     def train_minibatch(self, *x):
         self.f_prepare()
-        return self.f_learn(*x)
+        return self.learning_func(*x)
 
 
 class Rprop(SGDTrainer):
@@ -324,7 +166,7 @@ class RmsProp(SGDTrainer):
             yield param, param - self.learning_rate * grad / TT.sqrt(rms + 1e-8)
 
 
-class Scipy(Trainer):
+class Scipy(NeuralTrainer):
     '''General trainer for neural nets using `scipy.optimize.minimize`.'''
 
     METHODS = ('bfgs', 'cg', 'dogleg', 'newton-cg', 'trust-ncg')
@@ -340,7 +182,7 @@ class Scipy(Trainer):
 
     def function_at(self, x, train_set):
         self.set_params(self.flat_to_arrays(x))
-        return np.mean([self.f_eval(*x)[0] for x in train_set])
+        return np.mean([self.evaluation_func(*x)[0] for x in train_set])
 
     def gradient_at(self, x, train_set):
         self.set_params(self.flat_to_arrays(x))
@@ -353,7 +195,7 @@ class Scipy(Trainer):
     def train(self, train_set, valid_set=None, **kwargs):
         def display(x):
             self.set_params(self.flat_to_arrays(x))
-            costs = np.mean([self.f_eval(*x) for x in train_set], axis=0)
+            costs = np.mean([self.evaluation_func(*x) for x in train_set], axis=0)
             cost_desc = ' '.join(
                 '%s=%.2f' % el for el in zip(self.cost_names, costs))
             logging.info('scipy.%s %i %s', self.method, i + 1, cost_desc)
@@ -388,7 +230,7 @@ class Scipy(Trainer):
         self.set_params(self.best_params)
 
 
-class LM(Trainer):
+class LM(NeuralTrainer):
     '''Levenberg-Marquardt trainer for neural networks.
     Based on the description of the algorithm in "Levenberg-Marquardt
     Optimization" by Sam Roweis.
@@ -452,7 +294,7 @@ class LM(Trainer):
 #         yield {'J': -1}
 
 
-class Sample(Trainer):
+class Sample(NeuralTrainer):
     '''This trainer replaces network weights with samples from the input.'''
 
     @staticmethod
@@ -507,7 +349,7 @@ class Sample(Trainer):
         yield {'J': -1}
 
 
-class Layerwise(Trainer):
+class Layerwise(NeuralTrainer):
     '''This trainer adapts parameters using a variant of layerwise pretraining.
     In this variant, we create "taps" at increasing depths into the original
     network weights, training only those weights that are below the tap. So, for

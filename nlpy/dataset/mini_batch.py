@@ -8,16 +8,22 @@ from abstract_dataset import AbstractDataset
 
 class MiniBatches(AbstractDataset):
 
-    def __init__(self, dataset, size=50):
+    def __init__(self, dataset, batch_size=20):
         self.origin = dataset
-        self.size = size
+        self.size = batch_size
+
+    def _yield_data(self, data, targets):
+        for i in xrange(len(data)/self.size):
+            yield data[i:i + self.size], targets[i:i + self.size]
 
     def train_set(self):
-
-        pass
+        data, targets = self.origin.train_set()[0]
+        return list(self._yield_data(data, targets))
 
     def test_set(self):
-        pass
+        data, targets = self.origin.test_set()[0]
+        return list(self._yield_data(data, targets))
 
     def valid_set(self):
-        pass
+        data, targets = self.origin.valid_set()[0]
+        return list(self._yield_data(data, targets))
