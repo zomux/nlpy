@@ -7,7 +7,7 @@
 import numpy as np
 import theano
 import theano.tensor as T
-from nlpy.deep.functions import FLOATX
+from nlpy.deep.functions import FLOATX, global_rand
 from nlpy.deep import nnprocessors
 import logging as loggers
 
@@ -61,11 +61,17 @@ class NeuralLayer(object):
         self.W, self.B, self.param_count = self.create_params(self.input_n, self.output_n, self.id)
 
     def create_params(self, input_n, output_n, suffix, sparse=None):
-        arr = np.random.randn(input_n, output_n) / np.sqrt(input_n + output_n)
+        # arr = np.random.randn(input_n, output_n) / np.sqrt(input_n + output_n)
+        ws = np.asarray(global_rand.uniform(low=-np.sqrt(6. / (input_n + output_n)),
+                                  high=np.sqrt(6. / (input_n + output_n)),
+                                  size=(input_n, output_n)))
+        if self.activation == 'sigmoid':
+            ws *= 4
         if sparse is not None:
-            arr *= np.random.binomial(n=1, p=sparse, size=(input_n, output_n))
-        weight = theano.shared(arr.astype(FLOATX), name='W_{}'.format(suffix))
-        arr = 1e-3 * np.random.randn(output_n)
-        bias = theano.shared(arr.astype(FLOATX), name='b_{}'.format(suffix))
+            ws *= np.random.binomial(n=1, p=sparse, size=(input_n, output_n))
+        weight = theano.shared(ws.astype(FLOATX), name='W_{}'.format(suffix))
+
+        bs =  np.zeros(output_n)
+        bias = theano.shared(bs.astype(FLOATX), name='b_{}'.format(suffix))
         logging.info('weights for layer %s: %s x %s', suffix, input_n, output_n)
         return weight, bias, (input_n + 1) * output_n

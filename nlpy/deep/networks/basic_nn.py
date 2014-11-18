@@ -83,9 +83,12 @@ class NeuralNetwork(object):
         '''Return a list of the Theano parameters for this network.'''
         params = []
         params.extend(self.weights)
-        if not self.config.no_learn_biases:
-            params.extend(self.biases)
+        params.extend(self.biases)
+
         return params
+
+    def set_params(self, params):
+        self.weights, self.biases = params
 
     def get_weights(self, layer, borrow=False):
         return self.weights[layer].get_value(borrow=borrow)

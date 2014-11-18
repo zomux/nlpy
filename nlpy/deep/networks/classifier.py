@@ -29,13 +29,13 @@ class NeuralClassifier(NeuralNetwork):
         return -T.mean(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
 
     @property
-    def accuracy(self):
+    def errors(self):
         '''Compute the percent correct classifications.'''
-        return 100 * T.mean(T.eq(T.argmax(self.vars.y, axis=1), self.vars.k))
+        return 100 * T.mean(T.neq(T.argmax(self.vars.y, axis=1), self.vars.k))
 
     @property
     def monitors(self):
-        yield 'acc', self.accuracy
+        yield 'err', self.errors
         for i, h in enumerate(self.hiddens):
             yield 'h{}<0.1'.format(i+1), 100 * (abs(h) < 0.1).mean()
             yield 'h{}<0.9'.format(i+1), 100 * (abs(h) < 0.9).mean()

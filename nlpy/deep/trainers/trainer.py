@@ -48,6 +48,7 @@ class NeuralTrainer(object):
 
         self.params = network.params()
         self.config = config if config else TrainerConfig()
+        self.network = network
 
         self.J = network.J(self.config)
         self.cost_exprs = [self.J]
@@ -93,8 +94,7 @@ class NeuralTrainer(object):
             self.cost_names,
             np.mean([self.evaluation_func(*x) for x in test_set], axis=0)))
         info = ' '.join('%s=%.2f' % el for el in costs)
-        logging.info('test %i %s', iteration + 1, info)
-
+        logging.info('test    (iter=%i) %s', iteration + 1, info)
 
     def evaluate(self, iteration, valid_set):
         costs = list(zip(
@@ -109,7 +109,7 @@ class NeuralTrainer(object):
             self.best_params = [p.get_value().copy() for p in self.params]
             marker = ' *'
         info = ' '.join('%s=%.2f' % el for el in costs)
-        logging.info('validation %i %s%s', iteration + 1, info, marker)
+        logging.info('valid   (iter=%i) %s%s', iteration + 1, info, marker)
         return iteration - self.best_iter < self.patience
 
     def train(self, train_set, valid_set=None):
@@ -175,7 +175,7 @@ class SGDTrainer(NeuralTrainer):
 
             if not iteration % self.config.monitor_frequency:
                 info = ' '.join('%s=%.2f' % el for el in costs)
-                logging.info('monitor %i %s', iteration + 1, info)
+                logging.info('monitor (iter=%i) %s', iteration + 1, info)
             iteration += 1
 
             yield dict(costs)

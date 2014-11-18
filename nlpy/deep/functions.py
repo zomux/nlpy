@@ -6,11 +6,12 @@
 
 import theano
 import theano.tensor as T
-from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+# from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
+import numpy as np
 
 FLOATX = theano.config.floatX
 
-global_rand = RandomStreams()
+global_rand = np.random.RandomState()
 
 
 class VarMap():

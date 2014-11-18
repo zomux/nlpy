@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO)
 
 if __name__ == '__main__':
     net_conf = NetworkConfig(input_size=28*28)
-    net_conf.layers = [NeuralLayer(500, 'relu'), NeuralLayer(10, 'softmax')]
+    net_conf.layers = [NeuralLayer(500, 'sigmoid'), NeuralLayer(10, 'softmax')]
 
     trainer_conf = TrainerConfig()
     trainer_conf.learning_rate = 0.01
@@ -30,5 +30,6 @@ if __name__ == '__main__':
     for k in list(trainer.train(mnist.train_set(), mnist.valid_set(), test_set=mnist.test_set())):
         pass
     print k
+    trainer.test(0, mnist.test_set())
     end_time = time.time()
     print "elapsed time:", (end_time - start_time) / 60, "mins"
