@@ -10,6 +10,8 @@ import logging as loggers
 
 import theano.tensor as T
 import theano
+import gzip
+import cPickle as pickle
 
 
 logging = loggers.getLogger(__name__)
@@ -30,7 +32,12 @@ class NeuralNetwork(object):
         self.hiddens = []
         self.weights = []
         self.biases = []
-        self.updates = {}
+        self.updates = []
+        self.inputs = []
+        self.special_params = []
+        self.special_monitors = []
+        self.updating_callbacks = []
+
 
         self.layers = config.layers
 
@@ -39,8 +46,14 @@ class NeuralNetwork(object):
 
         logging.info("total network parameters: %d", count)
 
+    def updating_callback(self, costs):
+        for cb in self.updating_callbacks:
+            cb(costs)
+
     def setup_vars(self):
         self.vars.x = T.matrix('x')
+        self.inputs.append(self.vars.x)
+
 
     def setup_layers(self):
         last_size = self.config.input_size
@@ -54,16 +67,23 @@ class NeuralNetwork(object):
             layer.connect(self.config, self.vars, z, last_size, i + 1)
             parameter_count += layer.param_count
             self.hiddens.append(layer.output_func)
-            self.weights.append(layer.W)
-            self.biases.append(layer.B)
+            if type(layer.W) == list:
+                self.weights.extend(layer.W)
+            else:
+                self.weights.append(layer.W)
+            if type(layer.B) == list:
+                self.biases.extend(layer.B)
+            else:
+                self.biases.append(layer.B)
+            self.special_params.extend(layer.params)
+            self.special_monitors.extend(layer.monitors)
+            self.updates.extend(layer.updates)
+            self.inputs.extend(layer.inputs)
+            if 'updating_callback' in dir(layer):
+                self.updating_callbacks.append(layer.updating_callback)
             z = layer.output_func
             last_size = size
         return self.hiddens.pop(), parameter_count
-
-    @property
-    def inputs(self):
-        '''Return a list of Theano input variables for this network.'''
-        return [self.vars.x]
 
     @property
     def monitors(self):
@@ -73,28 +93,25 @@ class NeuralNetwork(object):
         for i, h in enumerate(self.hiddens):
             yield 'h{}<0.1'.format(i+1), 100 * (abs(h) < 0.1).mean()
             yield 'h{}<0.9'.format(i+1), 100 * (abs(h) < 0.9).mean()
+        for name, exp in self.special_monitors:
+            yield name, exp
 
     def _compile(self):
         if getattr(self, '_compute', None) is None:
             self._compute = theano.function(
-                [self.vars.x], self.hiddens + [self.vars.y], updates=self.updates)
+                [self.vars.x], self.hiddens + [self.vars.y], updates=self.updates, allow_input_downcast=True)
 
     def params(self):
         '''Return a list of the Theano parameters for this network.'''
         params = []
         params.extend(self.weights)
         params.extend(self.biases)
+        params.extend(self.special_params)
 
         return params
 
     def set_params(self, params):
         self.weights, self.biases = params
-
-    def get_weights(self, layer, borrow=False):
-        return self.weights[layer].get_value(borrow=borrow)
-
-    def get_biases(self, layer, borrow=False):
-        return self.biases[layer].get_value(borrow=borrow)
 
     def feed_forward(self, x):
         self._compile()
@@ -120,3 +137,30 @@ class NeuralNetwork(object):
             cost += train_conf.contractive_l2 * sum(
                 T.sqr(T.grad(h.mean(axis=0).sum(), self.vars.x)).sum() for h in self.hiddens)
         return cost
+
+    def save_params(self, path):
+        logging.info("saving parameters to %s" % path)
+        opener = gzip.open if path.lower().endswith('.gz') else open
+        handle = opener(path, 'wb')
+        pickle.dump({
+            "weights": [p.get_value().copy() for p in self.weights],
+            "biases": [p.get_value().copy() for p in self.biases],
+            "special_params": [p.get_value().copy() for p in self.special_params]
+        }, handle)
+        handle.close()
+
+    def load_params(self, path):
+        logging.info("loading parameters from %s" % path)
+        opener = gzip.open if path.lower().endswith('.gz') else open
+        handle = opener(path, 'rb')
+        saved = pickle.load(handle)
+        for target, source in zip(self.weights, saved['weights']):
+            logging.info('%s: setting value %s', target.name, source.shape)
+            target.set_value(source)
+        for target, source in zip(self.biases, saved['biases']):
+            logging.info('%s: setting value %s', target.name, source.shape)
+            target.set_value(source)
+        for target, source in zip(self.special_params, saved['special_params']):
+            logging.info('%s: setting value %s', target.name, source.shape)
+            target.set_value(source)
+        handle.close()

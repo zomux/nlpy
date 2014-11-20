@@ -12,7 +12,7 @@ import numpy as np
 import numpy.random as rng
 import scipy.optimize
 import theano
-import theano.tensor as TT
+import theano.tensor as T
 from nlpy.deep.conf import TrainerConfig
 
 
@@ -56,10 +56,19 @@ class NeuralTrainer(object):
         for name, monitor in network.monitors:
             self.cost_names.append(name)
             self.cost_exprs.append(monitor)
+        logging.info("monitor list: %s" % ",".join(self.cost_names))
+
 
         logging.info('compiling evaluation function')
+        self.ev_cost_exprs = []
+        self.ev_cost_names = []
+        for i in range(len(self.cost_names)):
+            if self.cost_names[i].endswith("x"):
+                continue
+            self.ev_cost_exprs.append(self.cost_exprs[i])
+            self.ev_cost_names.append(self.cost_names[i])
         self.evaluation_func = theano.function(
-            network.inputs, self.cost_exprs, updates=network.updates, allow_input_downcast=True)
+            network.inputs, self.ev_cost_exprs, updates=network.updates, allow_input_downcast=True)
 
         self.validation_frequency = self.config.validation_frequency
         self.min_improvement = self.config.min_improvement
@@ -91,14 +100,14 @@ class NeuralTrainer(object):
 
     def test(self, iteration, test_set):
         costs = list(zip(
-            self.cost_names,
+            self.ev_cost_names,
             np.mean([self.evaluation_func(*x) for x in test_set], axis=0)))
         info = ' '.join('%s=%.2f' % el for el in costs)
         logging.info('test    (iter=%i) %s', iteration + 1, info)
 
     def evaluate(self, iteration, valid_set):
         costs = list(zip(
-            self.cost_names,
+            self.ev_cost_names,
             np.mean([self.evaluation_func(*x) for x in valid_set], axis=0)))
         marker = ''
         # this is the same as: (J_i - J_f) / J_i > min improvement
@@ -132,6 +141,7 @@ class SGDTrainer(NeuralTrainer):
         self.learning_rate = self.config.learning_rate
 
         logging.info('compiling %s learning function', self.__class__.__name__)
+
         self.learning_func = theano.function(
             network.inputs,
             self.cost_exprs,
@@ -139,7 +149,7 @@ class SGDTrainer(NeuralTrainer):
 
     def learning_updates(self):
         for param in self.params:
-            delta = self.learning_rate * TT.grad(self.J, param)
+            delta = self.learning_rate * T.grad(self.J, param)
             velocity = theano.shared(
                 np.zeros_like(param.get_value()), name=param.name + '_vel')
             yield velocity, self.momentum * velocity - delta
@@ -172,7 +182,6 @@ class SGDTrainer(NeuralTrainer):
             except KeyboardInterrupt:
                 logging.info('interrupted!')
                 break
-
             if not iteration % self.config.monitor_frequency:
                 info = ' '.join('%s=%.2f' % el for el in costs)
                 logging.info('monitor (iter=%i) %s', iteration + 1, info)
@@ -182,5 +191,8 @@ class SGDTrainer(NeuralTrainer):
 
         self.set_params(self.best_params)
 
+
     def train_minibatch(self, *x):
-        return self.learning_func(*x)
+        costs = self.learning_func(*x)
+        self.network.updating_callback(zip(self.cost_names,costs))
+        return costs

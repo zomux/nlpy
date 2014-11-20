@@ -15,10 +15,7 @@ class NeuralRegressor(NeuralNetwork):
 
         # the k variable holds the target output for input x.
         self.vars.k = T.matrix('k')
-
-    @property
-    def inputs(self):
-        return [self.vars.x, self.vars.k]
+        self.inputs.append(self.vars.k)
 
     @property
     def cost(self):

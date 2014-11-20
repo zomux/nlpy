@@ -19,10 +19,7 @@ class NeuralClassifier(NeuralNetwork):
 
         # for a classifier, k specifies the correct labels for a given input.
         self.vars.k = T.ivector('k')
-
-    @property
-    def inputs(self):
-        return [self.vars.x, self.vars.k]
+        self.inputs.append(self.vars.k)
 
     @property
     def cost(self):
@@ -39,6 +36,8 @@ class NeuralClassifier(NeuralNetwork):
         for i, h in enumerate(self.hiddens):
             yield 'h{}<0.1'.format(i+1), 100 * (abs(h) < 0.1).mean()
             yield 'h{}<0.9'.format(i+1), 100 * (abs(h) < 0.9).mean()
+        for name, exp in self.special_monitors:
+            yield name, exp
 
     def classify(self, x):
         return self.predict(x).argmax(axis=1)

@@ -37,3 +37,6 @@ class VarMap():
 
     def get(self, name):
         return self.varmap[name]
+
+    def set(self, name, value):
+        self.varmap[name] = value
