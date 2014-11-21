@@ -11,18 +11,19 @@ from nlpy.deep.functions import FLOATX, global_rand
 from nlpy.deep import nnprocessors
 import logging as loggers
 from layer import NeuralLayer
+from basic_nn import NeuralNetwork
 
 logging = loggers.getLogger(__name__)
 
 
-class RecurrentLayers(NeuralLayer):
+class SimpleRNNLayer(NeuralLayer):
 
     def __init__(self, size, depth, activation='sigmoid', noise=0., dropouts=0.):
         """
-        Create a neural layer.
+        Simple RNN Layer, input x sequence, output y sequence, cost, update parameters.
         :return:
         """
-        super(RecurrentLayers, self).__init__(size, activation, noise, dropouts)
+        super(SimpleRNNLayer, self).__init__(size, activation, noise, dropouts)
         self.depth = depth
 
     def connect(self, config, vars, x, input_n, id="UNKNOWN"):
@@ -48,7 +49,7 @@ class RecurrentLayers(NeuralLayer):
             s = self._softmax_func(T.dot(h, self.W_s) + self.B_s)
             return [h ,s]
 
-        [h_list, s_list], _ = theano.scan(fn=recurrent_step, sequences=self.x, outputs_info=[self.h_input, None],
+        [h_list, s_list], _ = theano.scan(fn=recurrent_step, sequences=self.x, outputs_info=[self.h0, None],
                                           n_steps=self.x.shape[0])
 
         return h_list, s_list
@@ -59,9 +60,10 @@ class RecurrentLayers(NeuralLayer):
         self.hidden_func, self.output_func = self._recurrent_func()
         self.monitors.append(("h<0.1", 100 * (abs(self.hidden_func[-1]) < 0.1).mean()))
         self.monitors.append(("h<0.9", 100 * (abs(self.hidden_func[-1]) < 0.9).mean()))
+        self.updates.append((self.h0, self.hidden_func[-1]))
 
     def _setup_params(self):
-        self.h_input = theano.shared(value=np.zeros((self.output_n,), dtype=FLOATX), name='h_input')
+        self.h0 = theano.shared(value=np.zeros((self.output_n,), dtype=FLOATX), name='h_input')
 
         self.W_i, _, self.param_count = self.create_params(self.input_n, self.output_n, "input")
         self.W_r, self.B_r, param_count = self.create_params(self.output_n, self.output_n, "recurrent")
@@ -70,7 +72,8 @@ class RecurrentLayers(NeuralLayer):
         self.param_count += param_count
 
         # Don't register parameters to the whole network
-        self.W = []; self.B = []
+        self.W = [self.W_i, self.W_r, self.W_s]
+        self.B = [self.B_r, self.B_s]
 
 
     def create_params(self, input_n, output_n, suffix, sparse=None):
@@ -89,3 +92,33 @@ class RecurrentLayers(NeuralLayer):
         logging.info('weights for layer %s: %s x %s', suffix, input_n, output_n)
         return weight, bias, (input_n + 1) * output_n
 
+
+class SimpleRNN(NeuralNetwork):
+    '''A classifier attempts to match a 1-hot target output.'''
+
+    def __init__(self, config):
+        super(SimpleRNN, self).__init__(config)
+
+    def setup_vars(self):
+        super(SimpleRNN, self).setup_vars()
+
+        # for a classifier, k specifies the correct labels for a given input.
+        self.vars.k = T.ivector('k')
+        self.inputs.append(self.vars.k)
+
+    @property
+    def cost(self):
+        return -T.sum(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
+
+    @property
+    def errors(self):
+        return 100 * T.mean(T.neq(T.argmax(self.vars.y, axis=1), self.vars.k))
+
+    @property
+    def monitors(self):
+        yield 'err', self.errors
+        for name, exp in self.special_monitors:
+            yield name, exp
+
+    def classify(self, x):
+        return self.predict(x).argmax(axis=1)

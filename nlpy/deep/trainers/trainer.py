@@ -14,6 +14,7 @@ import scipy.optimize
 import theano
 import theano.tensor as T
 from nlpy.deep.conf import TrainerConfig
+import sys
 
 
 logging = loggers.getLogger(__name__)
@@ -194,5 +195,5 @@ class SGDTrainer(NeuralTrainer):
 
     def train_minibatch(self, *x):
         costs = self.learning_func(*x)
-        self.network.updating_callback(zip(self.cost_names,costs))
+        # self.network.updating_callback(zip(self.cost_names,costs))
         return costs

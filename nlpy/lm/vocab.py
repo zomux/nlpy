@@ -18,6 +18,7 @@ class Vocab(object):
 
     def __init__(self):
         self.vocab_map = {}
+        self.reversed_map = None
         self.size = 0
         self.add(SENT_MARK)
         self.add(UNK_MARK)
@@ -32,6 +33,14 @@ class Vocab(object):
             return self.vocab_map[word]
         else:
             return self.vocab_map[UNK_MARK]
+
+    def word(self, index):
+        if not self.reversed_map:
+            self.reversed_map = {}
+            for k in self.vocab_map:
+                self.reversed_map[self.vocab_map[k]] = k
+        return self.reversed_map[index]
+
 
     def binvector(self, word):
         v = np.zeros(self.size, dtype=int)
