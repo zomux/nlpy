@@ -13,6 +13,7 @@ from nlpy.util import internal_resource
 from nlpy.deep import NetworkConfig, TrainerConfig, NeuralClassifier, SGDTrainer
 from nlpy.deep.networks import RecurrentLayers, NeuralLayer
 from nlpy.deep.networks.simple_rnn import SimpleRNN, SimpleRNNLayer
+from nlpy.deep.networks.multilayer_rnn import MultiLayerRNN, MultiRNNLayer
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -26,12 +27,12 @@ class RNNLMTest(unittest.TestCase):
         vocab.load(train_path)
 
         train_data = RNNDataGenerator(vocab, train_path, target_vector=False,
-                                      history_len=3, _just_test=False, fixed_length=False, progress=True)
+                                      history_len=-1, _just_test=False, fixed_length=False, progress=True)
         valid_data = RNNDataGenerator(vocab, valid_path, target_vector=False,
-                                      history_len=3, _just_test=False, fixed_length=False)
+                                      history_len=-1, _just_test=False, fixed_length=False, progress=True)
 
         net_conf = NetworkConfig(input_size=vocab.size)
-        net_conf.layers = [SimpleRNNLayer(size=50, depth=2, activation='sigmoid')]
+        net_conf.layers = [MultiRNNLayer(size=50, activation='relu')]
 
         trainer_conf = TrainerConfig()
         trainer_conf.learning_rate = 0.1
@@ -39,7 +40,7 @@ class RNNLMTest(unittest.TestCase):
         trainer_conf.hidden_l2 = 0.0001
         trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
 
-        network = SimpleRNN(net_conf)
+        network = MultiLayerRNN(net_conf)
         trainer = SGDTrainer(network, config=trainer_conf)
 
 
@@ -59,12 +60,13 @@ class RNNLMTest(unittest.TestCase):
         vocab = Vocab()
         vocab.load(train_path)
 
-        test_data = RNNDataGenerator(vocab, test_path, _just_test=True)
+        test_data = RNNDataGenerator(vocab, test_path, target_vector=False,
+                                      history_len=1, _just_test=False, fixed_length=False)
 
         net_conf = NetworkConfig(input_size=vocab.size)
-        net_conf.layers = [RecurrentLayers(size=50, depth=2, activation='sigmoid')]
+        net_conf.layers = [SimpleRNNLayer(size=50, depth=2, activation='sigmoid')]
 
-        network = NeuralClassifier(net_conf)
+        network = SimpleRNN(net_conf)
         network.load_params("/tmp/lmparam.gz")
 
 

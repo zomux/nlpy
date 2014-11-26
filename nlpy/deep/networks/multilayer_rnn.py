@@ -16,15 +16,17 @@ from basic_nn import NeuralNetwork
 logging = loggers.getLogger(__name__)
 
 
-class SimpleRNNLayer(NeuralLayer):
+class MultiRNNLayer(NeuralLayer):
 
-    def __init__(self, size, activation='sigmoid', noise=0., dropouts=0.):
+    def __init__(self, size, activation='sigmoid', noise=0., dropouts=0., update_h0=False):
         """
         Simple RNN Layer, input x sequence, output y sequence, cost, update parameters.
         Train a RNN without BPTT layers, which means the history_len should be set to 0 for the training data.
         :return:
         """
-        super(SimpleRNNLayer, self).__init__(size, activation, noise, dropouts)
+        super(MultiRNNLayer, self).__init__(size, activation, noise, dropouts)
+        self.learning_rate = 0.01
+        self.update_h0 = update_h0
 
     def connect(self, config, vars, x, input_n, id="UNKNOWN"):
         """
@@ -42,25 +44,39 @@ class SimpleRNNLayer(NeuralLayer):
         self._setup_functions()
         self.connected = True
 
+    def _stepping_updates(self, s, k_t):
+        cost = self._cost_func(s, k_t)
+        lr = self.learning_rate
+        return { self.W_i: self.W_i - lr * T.grad(cost, self.W_i),
+                 self.W_r: self.W_r - lr * T.grad(cost, self.W_r),
+                 self.W_s: self.W_s - lr * T.grad(cost, self.W_s),
+                 self.B_s: self.B_s - lr * T.grad(cost, self.B_s),
+                 self.B_r: self.B_r - lr * T.grad(cost, self.B_r)}
+
+    def _cost_func(self, s ,k_t):
+        return -T.log(s[k_t])
+
     def _recurrent_func(self):
 
-        def recurrent_step(x_t, h_t):
+        def recurrent_step(x_t, k_t, h_t):
             h = self._activation_func(T.dot(x_t, self.W_i)+ T.dot(h_t, self.W_r) + self.B_r)
             s = self._softmax_func(T.dot(h, self.W_s) + self.B_s)
-            return [h ,s]
+            return [h ,s], self._stepping_updates(s, k_t)
 
-        [h_list, s_list], _ = theano.scan(fn=recurrent_step, sequences=self.x, outputs_info=[self.h0, None],
+        [h_list, s_list], updates = theano.scan(fn=recurrent_step, sequences=[self.x, self._vars.k], outputs_info=[self.h0, None],
                                           n_steps=self.x.shape[0])
 
-        return h_list, s_list
+        return h_list, s_list, updates
 
     def _setup_functions(self):
         self._activation_func = nnprocessors.build_activation(self.activation)
         self._softmax_func = nnprocessors.build_activation('softmax')
-        self.hidden_func, self.output_func = self._recurrent_func()
+        self.hidden_func, self.output_func, updates = self._recurrent_func()
         self.monitors.append(("h<0.1", 100 * (abs(self.hidden_func[-1]) < 0.1).mean()))
         self.monitors.append(("h<0.9", 100 * (abs(self.hidden_func[-1]) < 0.9).mean()))
-        self.updates.append((self.h0, self.hidden_func[-1]))
+        if self.update_h0:
+          self.updates.append((self.h0, self.hidden_func[-1]))
+        self.updates.extend(updates.items())
 
     def _setup_params(self):
         self.h0 = theano.shared(value=np.zeros((self.output_n,), dtype=FLOATX), name='h_input')
@@ -72,8 +88,9 @@ class SimpleRNNLayer(NeuralLayer):
         self.param_count += param_count
 
         # Don't register parameters to the whole network
-        self.W = [self.W_i, self.W_r, self.W_s]
-        self.B = [self.B_r, self.B_s]
+        # Update inside the recurrent steps
+        self.W = []
+        self.B = []
 
 
     def create_params(self, input_n, output_n, suffix, sparse=None):
@@ -93,14 +110,13 @@ class SimpleRNNLayer(NeuralLayer):
         return weight, bias, (input_n + 1) * output_n
 
 
-class SimpleRNN(NeuralNetwork):
-    '''A classifier attempts to match a 1-hot target output.'''
+class MultiLayerRNN(NeuralNetwork):
 
     def __init__(self, config):
-        super(SimpleRNN, self).__init__(config)
+        super(MultiLayerRNN, self).__init__(config)
 
     def setup_vars(self):
-        super(SimpleRNN, self).setup_vars()
+        super(MultiLayerRNN, self).setup_vars()
 
         # for a classifier, k specifies the correct labels for a given input.
         self.vars.k = T.ivector('k')

@@ -78,7 +78,7 @@ class NeuralTrainer(object):
         self.shapes = [p.get_value(borrow=True).shape for p in self.params]
         self.counts = [np.prod(s) for s in self.shapes]
         self.starts = np.cumsum([0] + self.counts)[:-1]
-        self.dtype = self.params[0].get_value().dtype
+        # self.dtype = self.params[0].get_value().dtype
 
         self.best_cost = 1e100
         self.best_iter = 0
@@ -143,10 +143,16 @@ class SGDTrainer(NeuralTrainer):
 
         logging.info('compiling %s learning function', self.__class__.__name__)
 
+        network_updates = list(network.updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
         self.learning_func = theano.function(
             network.inputs,
             self.cost_exprs,
-            updates=list(network.updates) + list(self.learning_updates()), allow_input_downcast=True)
+            updates=update_list, allow_input_downcast=True)
 
     def learning_updates(self):
         for param in self.params:

@@ -5,6 +5,7 @@
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
 from nlpy.util import LineIterator
+import sys
 import numpy as np
 import math
 from progressbar import ProgressBar
@@ -17,6 +18,7 @@ class RNNDataGenerator(object):
         Generate data for training with RNN
         :type vocab: nlpy.lm.Vocab
         :type data_path: str
+        :param history_len: if this value is -1, then one trunk is a sentence
         :type history_len: int
         :type binvector: bool
         """
@@ -48,7 +50,12 @@ class RNNDataGenerator(object):
 
         for sent_i in xrange(len(self.sentences)):
             sent = self.sentences[sent_i]
-            trunk_n = int(math.ceil(float(len(sent) - 1) / trunk_size))
+
+            if self.history_len == -1:
+                trunk_n = 1
+                trunk_size = len(sent)
+            else:
+                trunk_n = int(math.ceil(float(len(sent) - 1) / trunk_size))
 
             for trunk_i in range(trunk_n):
                 end_of_x = trunk_i * trunk_size + trunk_size
@@ -74,7 +81,9 @@ class RNNDataGenerator(object):
                 progress.update(sent_i)
 
         if self.progress:
-            progress.finish()
+            # progress.finish()
+            progress.update(0)
+            sys.stdout.write("\033[F")
 
     def __iter__(self):
 

@@ -45,6 +45,7 @@ class NeuralNetwork(object):
         self.vars.y, count = self.setup_layers()
 
         logging.info("total network parameters: %d", count)
+        logging.info("network inputs: %s", " ".join(map(str, self.inputs)))
 
     def updating_callback(self, costs):
         for cb in self.updating_callbacks:

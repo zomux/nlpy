@@ -23,7 +23,7 @@ class VocabTest(unittest.TestCase):
         v = Vocab()
         v.load(data_path)
         c = 0
-        g = RNNDataGenerator(v, data_path, history_len=3)
+        g = RNNDataGenerator(v, data_path, history_len=0)
         for d in g:
             print d
             c += 1
