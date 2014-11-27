@@ -26,6 +26,15 @@ class KeywordExtractor(object):
             )
         return keywords
 
+    def extract_weighted(self, sent):
+        keywords = self._kwex.extract_weighted(
+                map(self._recaser.recase,
+                    map(self._lem.lemmatize,
+                        map(str.lower,
+                            self._tokenizer.tokenize(sent))))
+            )
+        return keywords
+
     @staticmethod
     def serve(params):
         global keyword_extractor

@@ -49,24 +49,28 @@ class SemanticSearcher(object):
         best_score = 0
         best_sent = ""
         for d in self._data:
-            keywords_d = self._lemmatized_keywords(d)[:5]
-            total_score = 0.0
-            count = 0
-            for kw_d, wt_d in keywords_d:
-                for kw, wt in keywords:
-                    if kw_d not in self._vec._model.vocab:
-                        continue
-                    total_score += self._vec.similarity(kw_d, kw) * wt * wt_d
-                    count += 1
-            if not count:
-                continue
-            average_score = total_score / count
+            average_score = self.similarity(keywords, d)
             nbest.add(average_score, d)
 
         if nbest.is_empty():
             nbest.add(0, "")
 
         return nbest.get()
+
+    def similarity(self, keywords, document):
+        keywords_d = self._lemmatized_keywords(document)[:5]
+        total_score = 0.0
+        count = 0
+        for kw_d, wt_d in keywords_d:
+            for kw, wt in keywords:
+                if kw_d not in self._vec._model.vocab:
+                    continue
+                total_score += self._vec.similarity(kw_d, kw) * wt * wt_d
+                count += 1
+        if not count:
+            return 0
+        average_score = total_score / count
+        return average_score
 
 
     def _lemmatized_keywords(self, sent):

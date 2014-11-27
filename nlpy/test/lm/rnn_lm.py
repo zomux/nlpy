@@ -14,7 +14,9 @@ from nlpy.deep import NetworkConfig, TrainerConfig, NeuralClassifier, SGDTrainer
 from nlpy.deep.networks import RecurrentLayers, NeuralLayer
 from nlpy.deep.networks.simple_rnn import SimpleRNN, SimpleRNNLayer
 from nlpy.deep.networks.multilayer_rnn import MultiLayerRNN, MultiRNNLayer
+from nlpy.deep.networks.classifier_runner import NeuralClassifierRunner
 
+import numpy as np
 import logging
 logging.basicConfig(level=logging.INFO)
 
@@ -61,17 +63,25 @@ class RNNLMTest(unittest.TestCase):
         vocab.load(train_path)
 
         test_data = RNNDataGenerator(vocab, test_path, target_vector=False,
-                                      history_len=1, _just_test=False, fixed_length=False)
+                                      history_len=-1, _just_test=True, fixed_length=False)
 
         net_conf = NetworkConfig(input_size=vocab.size)
-        net_conf.layers = [SimpleRNNLayer(size=50, depth=2, activation='sigmoid')]
+        net_conf.layers = [MultiRNNLayer(size=50, activation='relu')]
 
-        network = SimpleRNN(net_conf)
+        network = MultiLayerRNN(net_conf)
         network.load_params("/tmp/lmparam.gz")
 
 
-        print map(vocab.word, list(test_data)[0][1])
-        print map(vocab.word, network.classify(list(test_data)[0][0]))
+
+        for d, t in test_data:
+
+            print map(vocab.word, np.argmax(d, axis=1))
+            print map(vocab.word, t)
+            print map(vocab.word, network.classify(d))
+            print "-"
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
