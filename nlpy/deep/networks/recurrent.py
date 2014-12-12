@@ -18,9 +18,9 @@ from theano.ifelse import ifelse
 logging = loggers.getLogger(__name__)
 
 
-class MultiRNNLayer(NeuralLayer):
+class RecurrentLayer(NeuralLayer):
 
-    def __init__(self, size, activation='sigmoid', noise=0., dropouts=0., update_h0=True, bptt=True,
+    def __init__(self, size, target_size=-1, activation='sigmoid', noise=0., dropouts=0., update_h0=True, bptt=True,
                  bptt_steps=5):
         """
         Simple RNN Layer, input x sequence, output y sequence, cost, update parameters.
@@ -28,12 +28,13 @@ class MultiRNNLayer(NeuralLayer):
         BPTT is conducted once for every piece of data
         :return:
         """
-        super(MultiRNNLayer, self).__init__(size, activation, noise, dropouts)
+        super(RecurrentLayer, self).__init__(size, activation, noise, dropouts)
         self.learning_rate = 0.1
         self.update_h0 = update_h0
         self.disable_bias = True
         self.bptt = bptt
         self.bptt_steps = bptt_steps
+        self.target_size = target_size
 
     def connect(self, config, vars, x, input_n, id="UNKNOWN"):
         """
@@ -154,6 +155,8 @@ class MultiRNNLayer(NeuralLayer):
             self.updates.append((self.h0, ifelse(T.eq(self._vars.k[-1], 0), self.init_h, self.hidden_func[-1])))
 
     def _setup_params(self):
+        if self.target_size < 0:
+            self.target_size = self.input_n
         self.h0 = theano.shared(value=np.ones((self.output_n,), dtype=FLOATX), name='h_input')
         self.init_h = theano.shared(value=self.h0.get_value(), name='init_h')
         self.zero_vector = theano.shared(value=np.zeros((self.output_n,), dtype=FLOATX), name='zero_h')
@@ -161,7 +164,7 @@ class MultiRNNLayer(NeuralLayer):
         self.W_i, _, self.param_count = self.create_params(self.input_n, self.output_n, "input")
         self.W_r, self.B_r, param_count = self.create_params(self.output_n, self.output_n, "recurrent")
         self.param_count += param_count
-        self.W_s, self.B_s, param_count = self.create_params(self.output_n, self.input_n, "softmax")
+        self.W_s, self.B_s, param_count = self.create_params(self.output_n, self.target_size, "softmax")
         self.param_count += param_count
 
         # Don't register parameters to the weights or bias
@@ -193,14 +196,14 @@ class MultiRNNLayer(NeuralLayer):
         self.h0.set_value(np.zeros((self.output_n,), dtype=FLOATX))
 
 
-class MultiLayerRNN(NeuralNetwork):
+class RecurrentNetwork(NeuralNetwork):
 
     def __init__(self, config):
-        super(MultiLayerRNN, self).__init__(config)
+        super(RecurrentNetwork, self).__init__(config)
         self._predict_compiled = False
 
     def setup_vars(self):
-        super(MultiLayerRNN, self).setup_vars()
+        super(RecurrentNetwork, self).setup_vars()
 
         # for a classifier, k specifies the correct labels for a given input.
         self.vars.k = T.ivector('k')

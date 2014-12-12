@@ -13,7 +13,7 @@ from nlpy.util import internal_resource
 from nlpy.deep import NetworkConfig, TrainerConfig, NeuralClassifier, SGDTrainer
 from nlpy.deep.networks import RecurrentLayers, NeuralLayer
 from nlpy.deep.networks.simple_rnn import SimpleRNN, SimpleRNNLayer
-from nlpy.deep.networks.multilayer_rnn import MultiLayerRNN, MultiRNNLayer
+from nlpy.deep.networks.multilayer_rnn import RecurrentNetwork, RecurrentLayer
 from nlpy.deep.networks.classifier_runner import NeuralClassifierRunner
 
 import numpy as np
@@ -34,7 +34,7 @@ class RNNLMTest(unittest.TestCase):
                                       history_len=-1, _just_test=False, fixed_length=False, progress=True)
 
         net_conf = NetworkConfig(input_size=vocab.size)
-        net_conf.layers = [MultiRNNLayer(size=50, activation='relu')]
+        net_conf.layers = [RecurrentLayer(size=50, activation='relu')]
 
         trainer_conf = TrainerConfig()
         trainer_conf.learning_rate = 0.1
@@ -42,7 +42,7 @@ class RNNLMTest(unittest.TestCase):
         trainer_conf.hidden_l2 = 0.0001
         trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
 
-        network = MultiLayerRNN(net_conf)
+        network = RecurrentNetwork(net_conf)
         trainer = SGDTrainer(network, config=trainer_conf)
 
 
@@ -66,9 +66,9 @@ class RNNLMTest(unittest.TestCase):
                                       history_len=-1, _just_test=True, fixed_length=False)
 
         net_conf = NetworkConfig(input_size=vocab.size)
-        net_conf.layers = [MultiRNNLayer(size=50, activation='relu')]
+        net_conf.layers = [RecurrentLayer(size=50, activation='relu')]
 
-        network = MultiLayerRNN(net_conf)
+        network = RecurrentNetwork(net_conf)
         network.load_params("/tmp/lmparam.gz")
 
 
