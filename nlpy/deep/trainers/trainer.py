@@ -15,6 +15,8 @@ import theano
 import theano.tensor as T
 from nlpy.deep.conf import TrainerConfig
 import sys
+import gzip
+import cPickle as pickle
 
 
 logging = loggers.getLogger(__name__)
@@ -47,7 +49,7 @@ class NeuralTrainer(object):
         """
         super(NeuralTrainer, self).__init__()
 
-        self.params = network.params()
+        self.params = network.params
         self.config = config if config else TrainerConfig()
         self.network = network
 
@@ -69,7 +71,8 @@ class NeuralTrainer(object):
             self.ev_cost_exprs.append(self.cost_exprs[i])
             self.ev_cost_names.append(self.cost_names[i])
         self.evaluation_func = theano.function(
-            network.inputs, self.ev_cost_exprs, updates=network.updates, allow_input_downcast=True)
+            network.inputs, self.ev_cost_exprs, updates=network.updates, allow_input_downcast=True,
+            mode=theano.Mode(linker='cvm'))
 
         self.validation_frequency = self.config.validation_frequency
         self.min_improvement = self.config.min_improvement
@@ -106,6 +109,11 @@ class NeuralTrainer(object):
         info = ' '.join('%s=%.2f' % el for el in costs)
         logging.info('test    (iter=%i) %s', iteration + 1, info)
 
+    # def _evaluation_wrapper(self, *x):
+    #     if self.network.needs_evaluating_callback:
+    #         self.network.evaluating_callback()
+    #     return self.evaluation_func(*x)
+
     def evaluate(self, iteration, valid_set):
         costs = list(zip(
             self.ev_cost_names,
@@ -124,6 +132,13 @@ class NeuralTrainer(object):
 
     def train(self, train_set, valid_set=None):
         raise NotImplementedError
+
+    def save_params(self, path):
+        logging.info("saving parameters to %s" % path)
+        opener = gzip.open if path.lower().endswith('.gz') else open
+        handle = opener(path, 'wb')
+        pickle.dump(self.best_params, handle)
+        handle.close()
 
 
 class SGDTrainer(NeuralTrainer):
@@ -152,10 +167,10 @@ class SGDTrainer(NeuralTrainer):
         self.learning_func = theano.function(
             network.inputs,
             self.cost_exprs,
-            updates=update_list, allow_input_downcast=True)
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker='cvm'))
 
     def learning_updates(self):
-        for param in self.params:
+        for param in self.network.weights + self.network.biases:
             delta = self.learning_rate * T.grad(self.J, param)
             velocity = theano.shared(
                 np.zeros_like(param.get_value()), name=param.name + '_vel')
@@ -173,7 +188,7 @@ class SGDTrainer(NeuralTrainer):
                     logging.info('interrupted!')
                     break
 
-            if not iteration % self.validation_frequency:
+            if not iteration % self.validation_frequency and valid_set:
                 try:
                     if not self.evaluate(iteration, valid_set):
                         logging.info('patience elapsed, bailing out')
@@ -185,7 +200,7 @@ class SGDTrainer(NeuralTrainer):
             try:
                 costs = list(zip(
                     self.cost_names,
-                    np.mean([self.train_minibatch(*x) for x in train_set], axis=0)))
+                    np.mean([self.learning_func(*x) for x in train_set], axis=0)))
             except KeyboardInterrupt:
                 logging.info('interrupted!')
                 break
@@ -197,9 +212,12 @@ class SGDTrainer(NeuralTrainer):
             yield dict(costs)
 
         self.set_params(self.best_params)
+        if test_set:
+            self.test(0, test_set)
 
 
-    def train_minibatch(self, *x):
-        costs = self.learning_func(*x)
-        # self.network.updating_callback(zip(self.cost_names,costs))
-        return costs
+    # def train_minibatch(self, *x):
+    #     if self.network.needs_callback:
+    #         self.network.updating_callback()
+    #     costs = self.learning_func(*x)
+    #     return costs

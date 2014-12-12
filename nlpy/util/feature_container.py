@@ -9,14 +9,17 @@ from line_iterator import LineIterator
 
 class FeatureContainer(object):
 
-    def __init__(self, path=None, dtype="libsvm"):
+    def __init__(self, path=None, dtype="libsvm", feature_n=-1):
         self.N = 0
         self.data = np.zeros(0)
         self.targets = np.zeros(0)
-        if path:
-            self.read(path, dtype)
+        self.feature_n = feature_n
+        self.path = path
+        self.dtype = dtype
+        # if path:
+        #     self.read(path, dtype)
 
-    def read(self, path, dtype="libsvm"):
+    def read(self):
         """
         Read feature matrix from data
         :param path: data path
@@ -24,7 +27,7 @@ class FeatureContainer(object):
         """
         ys = []
         xs = []
-        for line in LineIterator(path):
+        for line in LineIterator(self.path):
             items = line.split(" ")
             feature_map = {}
             y = 0
@@ -34,16 +37,19 @@ class FeatureContainer(object):
                     feature_map[int(feature_idx)] = float(value)
                 else:
                     y = int(item)
-
-            max_key = max(feature_map.keys()) if feature_map else 0
+            if self.feature_n == -1:
+                max_key = max(feature_map.keys()) if feature_map else 0
+            else:
+                max_key = self.feature_n
             features = []
             for fidx in range(1, max_key + 1):
                 if fidx in feature_map:
                     features.append(feature_map[fidx])
                 else:
                     features.append(0)
-            xs.append(features)
-            ys.append(y)
-
-        self.data = np.array(xs)
-        self.targets = np.array(ys)
+            yield features, y
+        #     xs.append(features)
+        #     ys.append(y)
+        #
+        # self.data = np.array(xs)
+        # self.targets = np.array(ys)

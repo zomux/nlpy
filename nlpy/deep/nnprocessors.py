@@ -8,16 +8,20 @@ from functions import global_rand, FLOATX
 import functools
 import theano
 import theano.tensor as T
+from theano.tensor.shared_randomstreams import RandomStreams
+
+theano_rng = RandomStreams()
+
 
 def add_noise(x, sigma, rho):
     if sigma > 0 and rho > 0:
-        noise = global_rand.normal(size=x.shape, std=sigma, dtype=FLOATX)
-        mask = global_rand.binomial(size=x.shape, n=1, p=1-rho, dtype=FLOATX)
+        noise = theano_rng.normal(size=x.shape, std=sigma, dtype=FLOATX)
+        mask = theano_rng.binomial(size=x.shape, n=1, p=1-rho, dtype=FLOATX)
         return mask * (x + noise)
     if sigma > 0:
-        return x + global_rand.normal(size=x.shape, std=sigma, dtype=FLOATX)
+        return x + theano_rng.normal(size=x.shape, std=sigma, dtype=FLOATX)
     if rho > 0:
-        mask = global_rand.binomial(size=x.shape, n=1, p=1-rho, dtype=FLOATX)
+        mask = theano_rng.binomial(size=x.shape, n=1, p=1-rho, dtype=FLOATX)
         return mask * x
     return x
 

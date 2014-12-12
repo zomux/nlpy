@@ -47,9 +47,9 @@ class NeuralNetwork(object):
         logging.info("total network parameters: %d", count)
         logging.info("network inputs: %s", " ".join(map(str, self.inputs)))
 
-    def updating_callback(self, costs):
+    def updating_callback(self):
         for cb in self.updating_callbacks:
-            cb(costs)
+            cb()
 
     def setup_vars(self):
         self.vars.x = T.matrix('x')
@@ -84,6 +84,7 @@ class NeuralNetwork(object):
                 self.updating_callbacks.append(layer.updating_callback)
             z = layer.output_func
             last_size = size
+        self.needs_callback = bool(self.updating_callbacks)
         return self.hiddens.pop(), parameter_count
 
     @property
@@ -102,6 +103,7 @@ class NeuralNetwork(object):
             self._compute = theano.function(
                 [self.vars.x], self.hiddens + [self.vars.y], updates=self.updates, allow_input_downcast=True)
 
+    @property
     def params(self):
         '''Return a list of the Theano parameters for this network.'''
         params = []
@@ -143,11 +145,7 @@ class NeuralNetwork(object):
         logging.info("saving parameters to %s" % path)
         opener = gzip.open if path.lower().endswith('.gz') else open
         handle = opener(path, 'wb')
-        pickle.dump({
-            "weights": [p.get_value().copy() for p in self.weights],
-            "biases": [p.get_value().copy() for p in self.biases],
-            "special_params": [p.get_value().copy() for p in self.special_params]
-        }, handle)
+        pickle.dump([p.get_value().copy() for p in self.params], handle)
         handle.close()
 
     def load_params(self, path):
@@ -155,13 +153,7 @@ class NeuralNetwork(object):
         opener = gzip.open if path.lower().endswith('.gz') else open
         handle = opener(path, 'rb')
         saved = pickle.load(handle)
-        for target, source in zip(self.weights, saved['weights']):
-            logging.info('%s: setting value %s', target.name, source.shape)
-            target.set_value(source)
-        for target, source in zip(self.biases, saved['biases']):
-            logging.info('%s: setting value %s', target.name, source.shape)
-            target.set_value(source)
-        for target, source in zip(self.special_params, saved['special_params']):
+        for target, source in zip(self.params, saved):
             logging.info('%s: setting value %s', target.name, source.shape)
             target.set_value(source)
         handle.close()

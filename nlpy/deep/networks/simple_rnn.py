@@ -45,8 +45,8 @@ class SimpleRNNLayer(NeuralLayer):
     def _recurrent_func(self):
 
         def recurrent_step(x_t, h_t):
-            h = self._activation_func(T.dot(x_t, self.W_i)+ T.dot(h_t, self.W_r) + self.B_r)
-            s = self._softmax_func(T.dot(h, self.W_s) + self.B_s)
+            h = self._activation_func(T.dot(x_t, self.W_i)+ T.dot(h_t, self.W_r))
+            s = self._softmax_func(T.dot(h, self.W_s))
             return [h ,s]
 
         [h_list, s_list], _ = theano.scan(fn=recurrent_step, sequences=self.x, outputs_info=[self.h0, None],
@@ -73,7 +73,8 @@ class SimpleRNNLayer(NeuralLayer):
 
         # Don't register parameters to the whole network
         self.W = [self.W_i, self.W_r, self.W_s]
-        self.B = [self.B_r, self.B_s]
+        self.B = []
+        # self.B = [self.B_r, self.B_s]
 
 
     def create_params(self, input_n, output_n, suffix, sparse=None):
@@ -93,6 +94,10 @@ class SimpleRNNLayer(NeuralLayer):
         return weight, bias, (input_n + 1) * output_n
 
 
+    def reset_hidden_layer(self):
+        self.h0.set_value(np.zeros((self.output_n,), dtype=FLOATX), borrow=True)
+
+
 class SimpleRNN(NeuralNetwork):
     '''A classifier attempts to match a 1-hot target output.'''
 
@@ -106,9 +111,10 @@ class SimpleRNN(NeuralNetwork):
         self.vars.k = T.ivector('k')
         self.inputs.append(self.vars.k)
 
+
     @property
     def cost(self):
-        return -T.sum(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
+        return -T.log(self.vars.y[-1][self.vars.k[-1]])
 
     @property
     def errors(self):
@@ -122,3 +128,6 @@ class SimpleRNN(NeuralNetwork):
 
     def classify(self, x):
         return self.predict(x).argmax(axis=1)
+
+    def get_top_prob(self, x):
+        return self.predict(x).max(axis=1)

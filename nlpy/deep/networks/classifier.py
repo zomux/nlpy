@@ -21,14 +21,28 @@ class NeuralClassifier(NeuralNetwork):
         self.vars.k = T.ivector('k')
         self.inputs.append(self.vars.k)
 
+    def _cost_func(self):
+        return -T.mean(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
+
+    def _error_func(self):
+        return 100 * T.mean(T.neq(T.argmax(self.vars.y, axis=1), self.vars.k))
+
     @property
     def cost(self):
-        return -T.mean(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
+        return self._cost_func(self)
+
+    @cost.setter
+    def cost(self, value):
+        self._cost_func = value
 
     @property
     def errors(self):
         '''Compute the percent correct classifications.'''
-        return 100 * T.mean(T.neq(T.argmax(self.vars.y, axis=1), self.vars.k))
+        return self._error_func(self)
+
+    @errors.setter
+    def errors(self, value):
+      self._error_func = value
 
     @property
     def monitors(self):

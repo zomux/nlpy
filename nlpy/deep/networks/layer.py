@@ -16,7 +16,7 @@ logging = loggers.getLogger(__name__)
 
 class NeuralLayer(object):
 
-    def __init__(self, size, activation='sigmoid', noise=0., dropouts=0., shared_bias=None):
+    def __init__(self, size, activation='sigmoid', noise=0., dropouts=0., shared_bias=None, disable_bias=True):
         """
         Create a neural layer.
         :return:
@@ -28,6 +28,7 @@ class NeuralLayer(object):
         self.noise = noise
         self.dropouts = dropouts
         self.shared_bias = shared_bias
+        self.disable_bias = disable_bias
         self.updates = []
         self.params = []
         self.monitors = []
@@ -53,6 +54,8 @@ class NeuralLayer(object):
         if self.shared_bias:
             self._vars.update_if_not_existing(self.shared_bias, self.B)
         bias = self.B if not self.shared_bias else self._vars.get(self.shared_bias)
+        if self.disable_bias:
+            bias = 0
 
         self._activation_func = nnprocessors.build_activation(self.activation)
         self.preact_func = T.dot(self.x, self.W) + bias
@@ -63,6 +66,8 @@ class NeuralLayer(object):
 
     def _setup_params(self):
         self.W, self.B, self.param_count = self.create_params(self.input_n, self.output_n, self.id)
+        if self.disable_bias:
+            self.B = []
 
     def create_params(self, input_n, output_n, suffix, sparse=None):
         # arr = np.random.randn(input_n, output_n) / np.sqrt(input_n + output_n)

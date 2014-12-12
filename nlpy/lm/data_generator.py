@@ -13,7 +13,7 @@ from progressbar import ProgressBar
 class RNNDataGenerator(object):
 
 
-    def __init__(self, vocab, data_path, history_len, batch_size = 1, progress=False, fixed_length=True, target_vector=False, _just_test=False):
+    def __init__(self, vocab, data_path, history_len, batch_size = 1, overlap=False, progress=False, fixed_length=True, target_vector=False, _just_test=False):
         """
         Generate data for training with RNN
         :type vocab: nlpy.lm.Vocab
@@ -30,6 +30,7 @@ class RNNDataGenerator(object):
         self.minibatch_mode = not (batch_size == 1)
         self.fixed_length = fixed_length
         self.progress = progress
+        self.overlap = overlap
 
         self.sentences = []
 
@@ -57,12 +58,21 @@ class RNNDataGenerator(object):
             else:
                 trunk_n = int(math.ceil(float(len(sent) - 1) / trunk_size))
 
+            if self.overlap and trunk_size > 0:
+                trunk_n = len(sent) - self.history_len - 1
+
             for trunk_i in range(trunk_n):
-                end_of_x = trunk_i * trunk_size + trunk_size
+                if not self.overlap:
+                    start_of_x = trunk_i * trunk_size
+                    end_of_x = trunk_i * trunk_size + trunk_size
+                else:
+                    start_of_x = trunk_i
+                    end_of_x = trunk_i + self.history_len + 1
+
                 if end_of_x >= len(sent):
                     end_of_x = len(sent) - 1
-                x_indexs = sent[trunk_i * trunk_size: end_of_x]
-                y_indexs = sent[trunk_i * trunk_size + 1: trunk_i * trunk_size + trunk_size + 1]
+                x_indexs = sent[start_of_x: end_of_x]
+                y_indexs = sent[start_of_x + 1: end_of_x + 1]
                 if len(x_indexs) < trunk_size and self.fixed_length:
                     x_indexs += [0] * (trunk_size - len(x_indexs))
                     y_indexs += [0] * (trunk_size - len(y_indexs))
