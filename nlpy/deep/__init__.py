@@ -9,6 +9,6 @@ from nlpy.deep.networks.basic_nn import NeuralNetwork
 from nlpy.deep.networks.regressor import NeuralRegressor
 from networks.auto_encoder import AutoEncoder
 from nlpy.deep.networks.classifier import NeuralClassifier
-from nlpy.deep.trainers import NeuralTrainer, SGDTrainer
+from nlpy.deep.trainers import NeuralTrainer, SGDTrainer, AdaDeltaTrainer, AdaGradTrainer
 
 from nlpy.deep.conf import NetworkConfig, TrainerConfig

@@ -21,9 +21,11 @@ class NeuralClassifier(NeuralNetwork):
         self.vars.k = T.ivector('k')
         self.inputs.append(self.vars.k)
 
+    @staticmethod
     def _cost_func(self):
         return -T.mean(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
 
+    @staticmethod
     def _error_func(self):
         return 100 * T.mean(T.neq(T.argmax(self.vars.y, axis=1), self.vars.k))
 

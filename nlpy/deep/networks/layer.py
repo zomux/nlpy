@@ -30,9 +30,11 @@ class NeuralLayer(object):
         self.shared_bias = shared_bias
         self.disable_bias = disable_bias
         self.updates = []
+        self.learning_updates = []
         self.params = []
         self.monitors = []
         self.inputs = []
+        self.param_count = 0
 
     def connect(self, config, vars, x, input_n, id="UNKNOWN"):
         """
@@ -69,8 +71,7 @@ class NeuralLayer(object):
         if self.disable_bias:
             self.B = []
 
-    def create_params(self, input_n, output_n, suffix, sparse=None):
-        # arr = np.random.randn(input_n, output_n) / np.sqrt(input_n + output_n)
+    def create_weight(self, input_n, output_n, suffix, sparse=None):
         ws = np.asarray(global_rand.uniform(low=-np.sqrt(6. / (input_n + output_n)),
                                   high=np.sqrt(6. / (input_n + output_n)),
                                   size=(input_n, output_n)))
@@ -78,12 +79,33 @@ class NeuralLayer(object):
             ws *= 4
         if sparse is not None:
             ws *= np.random.binomial(n=1, p=sparse, size=(input_n, output_n))
+
         weight = theano.shared(ws.astype(FLOATX), name='W_{}'.format(suffix))
 
+        self.param_count += input_n * output_n
+        logging.info('create weight W_%s: %d x %d', suffix, input_n, output_n)
+        return weight
+
+    def create_bias(self, output_n, suffix):
         bs =  np.zeros(output_n)
         bias = theano.shared(bs.astype(FLOATX), name='b_{}'.format(suffix))
-        logging.info('weights for layer %s: %s x %s', suffix, input_n, output_n)
-        return weight, bias, (input_n + 1) * output_n
+        self.param_count += output_n
+        logging.info('create bias B_%s: %d', suffix, output_n)
+        return bias
+
+    def create_vector(self, n, name):
+        bs =  np.zeros(n)
+        v = theano.shared(bs.astype(FLOATX), name='{}'.format(name))
+
+        logging.info('create vector %s: %d', name, n)
+        return v
+
+    def create_matrix(self, m, n, name):
+
+        matrix = theano.shared(np.zeros((m, n)).astype(FLOATX), name=name)
+
+        logging.info('create matrix %s: %d x %d', name, m, n)
+        return matrix
 
     def callback_forward_propagation(self):
         pass

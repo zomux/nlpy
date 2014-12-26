@@ -29,3 +29,4 @@ def external_resource(path):
 from line_iterator import LineIterator
 from nbest_list import NBestList
 from feature_container import FeatureContainer
+from fake_generator import FakeGenerator

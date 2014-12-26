@@ -16,12 +16,13 @@ logging = loggers.getLogger(__name__)
 
 class Vocab(object):
 
-    def __init__(self):
+    def __init__(self, is_lang=True):
         self.vocab_map = {}
         self.reversed_map = None
         self.size = 0
-        self.add(SENT_MARK)
-        self.add(UNK_MARK)
+        if is_lang:
+            self.add(SENT_MARK)
+            self.add(UNK_MARK)
 
     def add(self, word):
         if word not in self.vocab_map:
@@ -52,8 +53,21 @@ class Vocab(object):
         v[index] = 1
         return v
 
-    def load(self, path):
+    def _load_fixed_size(self, path, fixed_size):
+        from collections import Counter
+        logging.info("fixed size: %d" % fixed_size)
+        counter = Counter()
+        for line in LineIterator(path):
+            words = line.split(" ")
+            counter.update(words)
+        for w, _ in counter.most_common(fixed_size):
+            self.add(w)
+
+    def load(self, path, fixed_size=-1):
         logging.info("load data from %s" % path)
+        if fixed_size > 0:
+            self._load_fixed_size(path, fixed_size)
+            return
         for line in LineIterator(path):
             words = line.split(" ")
             map(self.add, words)

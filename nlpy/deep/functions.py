@@ -15,11 +15,13 @@ FLOATX = theano.config.floatX
 
 global_rand = np.random.RandomState()
 
+
 def make_float_matrices(*names):
     ret = []
     for n in names:
         ret.append(T.matrix(n, dtype=FLOATX))
     return ret
+
 
 def make_float_vectors(*names):
     ret = []
@@ -27,15 +29,25 @@ def make_float_vectors(*names):
         ret.append(T.vector(n, dtype=FLOATX))
     return ret
 
+
 def monitor_var(value, name="", disabled=False):
     if disabled:
         return value
     else:
         return theano.printing.Print(name)(value)
 
+def monitor_var_sum(value, name="", disabled=False):
+    if disabled:
+        return T.sum(value)*0
+    else:
+        val = T.sum(theano.printing.Print(name)(value))*T.constant(0.0000001, dtype=FLOATX)
+        return T.cast(val, FLOATX)
+
+
 def back_grad(jacob, err_g):
     return T.dot(jacob, err_g)
-    #return (jacob.T * err_g).T
+    # return (jacob.T * err_g).T
+
 
 def replace_graph(node, dct, deepcopy=True):
     """
@@ -60,6 +72,7 @@ def replace_graph(node, dct, deepcopy=True):
             owner.inputs[i] = replace_graph(elem, dct)
     return node
 
+
 def build_node_name(n):
     if "owner" not in dir(n) or "inputs" not in dir(n.owner):
         return str(n)
@@ -67,6 +80,8 @@ def build_node_name(n):
         op_name = str(n.owner.op)
         if "{" not in op_name:
             op_name = "Elemwise{%s}" % op_name
+        if "," in op_name:
+            op_name = re.sub(r"\{([^}]+),[^}]+\}", "{\\1}", op_name)
         if "_" in op_name:
             op_name = re.sub(r"\{[^}]+_([^_}]+)\}", "{\\1}", op_name)
         return "%s(%s)" % (op_name, ",".join([build_node_name(m) for m in n.owner.inputs]))
@@ -102,8 +117,8 @@ def smart_replace_graph(n, dct, name_map=None, deepcopy=True):
             owner.inputs[i] = smart_replace_graph(elem, dct, name_map, deepcopy)
     return n
 
-class VarMap():
 
+class VarMap():
     def __init__(self):
         self.varmap = {}
 
@@ -120,11 +135,38 @@ class VarMap():
         return item in self.varmap
 
     def update_if_not_existing(self, name, value):
-         if name not in self.varmap:
-             self.varmap[name] = value
+        if name not in self.varmap:
+            self.varmap[name] = value
 
     def get(self, name):
         return self.varmap[name]
 
     def set(self, name, value):
         self.varmap[name] = value
+
+
+import numpy as np
+
+chars = [u" ", u"▁", u"▂", u"▃", u"▄", u"▅", u"▆", u"▇", u"█"]
+
+
+def plot_hinton(arr, max_arr=None):
+    if max_arr == None: max_arr = arr
+    arr = np.array(arr)
+    max_val = max(abs(np.max(max_arr)), abs(np.min(max_arr)))
+    print np.array2string(arr,
+                          formatter={'float_kind': lambda x: visual_hinton(x, max_val)},
+                          max_line_width=5000
+    )
+
+
+def visual_hinton(val, max_val):
+    if abs(val) == max_val:
+        step = len(chars) - 1
+    else:
+        step = int(abs(float(val) / max_val) * len(chars))
+    colourstart = ""
+    colourend = ""
+    if val < 0: colourstart, colourend = '\033[90m', '\033[0m'
+    #bh.internal = colourstart + chars[step] + colourend
+    return colourstart + chars[step] + colourend

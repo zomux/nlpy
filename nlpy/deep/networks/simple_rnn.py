@@ -18,13 +18,14 @@ logging = loggers.getLogger(__name__)
 
 class SimpleRNNLayer(NeuralLayer):
 
-    def __init__(self, size, activation='sigmoid', noise=0., dropouts=0.):
+    def __init__(self, size, target_size=-1, activation='sigmoid', noise=0., dropouts=0.):
         """
         Simple RNN Layer, input x sequence, output y sequence, cost, update parameters.
         Train a RNN without BPTT layers, which means the history_len should be set to 0 for the training data.
         :return:
         """
         super(SimpleRNNLayer, self).__init__(size, activation, noise, dropouts)
+        self.target_size = target_size
 
     def connect(self, config, vars, x, input_n, id="UNKNOWN"):
         """
@@ -42,14 +43,14 @@ class SimpleRNNLayer(NeuralLayer):
         self._setup_functions()
         self.connected = True
 
+    def _recurrent_step(self, x_t, h_t):
+        h = self._activation_func(T.dot(x_t, self.W_i)+ T.dot(h_t, self.W_r))
+        s = self._softmax_func(T.dot(h, self.W_s))
+        return [h ,s]
+
     def _recurrent_func(self):
 
-        def recurrent_step(x_t, h_t):
-            h = self._activation_func(T.dot(x_t, self.W_i)+ T.dot(h_t, self.W_r))
-            s = self._softmax_func(T.dot(h, self.W_s))
-            return [h ,s]
-
-        [h_list, s_list], _ = theano.scan(fn=recurrent_step, sequences=self.x, outputs_info=[self.h0, None],
+        [h_list, s_list], _ = theano.scan(fn=self._recurrent_step, sequences=self.x, outputs_info=[self.h0, None],
                                           n_steps=self.x.shape[0])
 
         return h_list, s_list
@@ -60,21 +61,28 @@ class SimpleRNNLayer(NeuralLayer):
         self.hidden_func, self.output_func = self._recurrent_func()
         self.monitors.append(("h<0.1", 100 * (abs(self.hidden_func[-1]) < 0.1).mean()))
         self.monitors.append(("h<0.9", 100 * (abs(self.hidden_func[-1]) < 0.9).mean()))
-        self.updates.append((self.h0, self.hidden_func[-1]))
+        # self.updates.append((self.h0, self.hidden_func[-1]))
 
     def _setup_params(self):
+        if self.target_size < 0:
+            self.target_size = self.input_n
+
         self.h0 = theano.shared(value=np.zeros((self.output_n,), dtype=FLOATX), name='h_input')
 
         self.W_i, _, self.param_count = self.create_params(self.input_n, self.output_n, "input")
         self.W_r, self.B_r, param_count = self.create_params(self.output_n, self.output_n, "recurrent")
         self.param_count += param_count
-        self.W_s, self.B_s, param_count = self.create_params(self.output_n, self.input_n, "softmax")
+        self.W_s, self.B_s, param_count = self.create_params(self.output_n, self.target_size, "softmax")
         self.param_count += param_count
 
         # Don't register parameters to the whole network
         self.W = [self.W_i, self.W_r, self.W_s]
         self.B = []
         # self.B = [self.B_r, self.B_s]
+        self._extra_params()
+
+    def _extra_params(self):
+        pass
 
 
     def create_params(self, input_n, output_n, suffix, sparse=None):
@@ -110,6 +118,7 @@ class SimpleRNN(NeuralNetwork):
         # for a classifier, k specifies the correct labels for a given input.
         self.vars.k = T.ivector('k')
         self.inputs.append(self.vars.k)
+        self.target_inputs.append(self.vars.k)
 
 
     @property
@@ -118,7 +127,7 @@ class SimpleRNN(NeuralNetwork):
 
     @property
     def errors(self):
-        return 100 * T.mean(T.neq(T.argmax(self.vars.y, axis=1), self.vars.k))
+        return T.neq(T.argmax(self.vars.y[-1]), self.vars.k[-1])
 
     @property
     def monitors(self):
@@ -126,8 +135,8 @@ class SimpleRNN(NeuralNetwork):
         for name, exp in self.special_monitors:
             yield name, exp
 
-    def classify(self, x):
-        return self.predict(x).argmax(axis=1)
+    def classify(self, *x):
+        return self.predict(*x).argmax(axis=1)
 
-    def get_top_prob(self, x):
-        return self.predict(x).max(axis=1)
+    def get_top_prob(self, *x):
+        return self.predict(*x).max(axis=1)

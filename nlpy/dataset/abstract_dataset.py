@@ -4,8 +4,6 @@
 # Copyright (C) 2015 NLPY.ORG
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
-import numpy as np
-
 class AbstractDataset(object):
 
     def __init__(self, target_format=None):

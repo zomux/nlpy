@@ -17,9 +17,19 @@ from nlpy.deep.conf import TrainerConfig
 import sys
 import gzip
 import cPickle as pickle
-
+from optimize import optimize_parameters
 
 logging = loggers.getLogger(__name__)
+
+THEANO_LINKER = 'cvm'
+
+
+def inspect_inputs(i, node, fn):
+    print i, node, "input(s) value(s):", [input[0] for input in fn.inputs],
+
+def inspect_outputs(i, node, fn):
+    print "output(s) value(s):", [output[0] for output in fn.outputs]
+
 
 
 def default_mapper(f, dataset, *args, **kwargs):
@@ -72,7 +82,10 @@ class NeuralTrainer(object):
             self.ev_cost_names.append(self.cost_names[i])
         self.evaluation_func = theano.function(
             network.inputs, self.ev_cost_exprs, updates=network.updates, allow_input_downcast=True,
-            mode=theano.Mode(linker='cvm'))
+            mode=theano.Mode(linker=THEANO_LINKER))
+            # mode=theano.compile.MonitorMode(
+            #             pre_func=inspect_inputs,
+            #             post_func=inspect_outputs) )
 
         self.validation_frequency = self.config.validation_frequency
         self.min_improvement = self.config.min_improvement
@@ -81,22 +94,10 @@ class NeuralTrainer(object):
         self.shapes = [p.get_value(borrow=True).shape for p in self.params]
         self.counts = [np.prod(s) for s in self.shapes]
         self.starts = np.cumsum([0] + self.counts)[:-1]
-        # self.dtype = self.params[0].get_value().dtype
 
         self.best_cost = 1e100
         self.best_iter = 0
         self.best_params = [p.get_value().copy() for p in self.params]
-
-    # def flat_to_arrays(self, x):
-    #     x = x.astype(self.dtype)
-    #     return [x[o:o+n].reshape(s) for s, o, n in
-    #             zip(self.shapes, self.starts, self.counts)]
-    #
-    # def arrays_to_flat(self, arrays):
-    #     x = np.zeros((sum(self.counts), ), self.dtype)
-    #     for arr, o, n in zip(arrays, self.starts, self.counts):
-    #         x[o:o+n] = arr.ravel()
-    #     return x
 
     def set_params(self, targets):
         for param, target in zip(self.params, targets):
@@ -108,11 +109,6 @@ class NeuralTrainer(object):
             np.mean([self.evaluation_func(*x) for x in test_set], axis=0)))
         info = ' '.join('%s=%.2f' % el for el in costs)
         logging.info('test    (iter=%i) %s', iteration + 1, info)
-
-    # def _evaluation_wrapper(self, *x):
-    #     if self.network.needs_evaluating_callback:
-    #         self.network.evaluating_callback()
-    #     return self.evaluation_func(*x)
 
     def evaluate(self, iteration, valid_set):
         costs = list(zip(
@@ -130,9 +126,6 @@ class NeuralTrainer(object):
         logging.info('valid   (iter=%i) %s%s', iteration + 1, info, marker)
         return iteration - self.best_iter < self.patience
 
-    def train(self, train_set, valid_set=None):
-        raise NotImplementedError
-
     def save_params(self, path):
         logging.info("saving parameters to %s" % path)
         opener = gzip.open if path.lower().endswith('.gz') else open
@@ -140,45 +133,10 @@ class NeuralTrainer(object):
         pickle.dump(self.best_params, handle)
         handle.close()
 
-
-class SGDTrainer(NeuralTrainer):
-    '''Stochastic gradient descent network trainer.'''
-
-    def __init__(self, network, config=None):
-        """
-        Create a SGD trainer.
-        :type network:
-        :type config: nlpy.deep.conf.TrainerConfig
-        :return:
-        """
-        super(SGDTrainer, self).__init__(network, config)
-
-        self.momentum = self.config.momentum
-        self.learning_rate = self.config.learning_rate
-
-        logging.info('compiling %s learning function', self.__class__.__name__)
-
-        network_updates = list(network.updates)
-        learning_updates = list(self.learning_updates())
-        update_list = network_updates + learning_updates
-        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
-        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
-
-        self.learning_func = theano.function(
-            network.inputs,
-            self.cost_exprs,
-            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker='cvm'))
-
-    def learning_updates(self):
-        for param in self.network.weights + self.network.biases:
-            delta = self.learning_rate * T.grad(self.J, param)
-            velocity = theano.shared(
-                np.zeros_like(param.get_value()), name=param.name + '_vel')
-            yield velocity, self.momentum * velocity - delta
-            yield param, param + velocity
-
     def train(self, train_set, valid_set=None, test_set=None):
         '''We train over mini-batches and evaluate periodically.'''
+        if not hasattr(self, 'learning_func'):
+            raise NotImplementedError
         iteration = 0
         while True:
             if not iteration % self.config.test_frequency and test_set:
@@ -207,13 +165,56 @@ class SGDTrainer(NeuralTrainer):
             if not iteration % self.config.monitor_frequency:
                 info = ' '.join('%s=%.2f' % el for el in costs)
                 logging.info('monitor (iter=%i) %s', iteration + 1, info)
+
             iteration += 1
+            if hasattr(self.network, "iteration_callback"):
+                self.network.iteration_callback()
 
             yield dict(costs)
 
-        self.set_params(self.best_params)
+        if valid_set:
+            self.set_params(self.best_params)
         if test_set:
             self.test(0, test_set)
+
+
+class SGDTrainer(NeuralTrainer):
+    '''Stochastic gradient descent network trainer.'''
+
+    def __init__(self, network, config=None):
+        """
+        Create a SGD trainer.
+        :type network:
+        :type config: nlpy.deep.conf.TrainerConfig
+        :return:
+        """
+        super(SGDTrainer, self).__init__(network, config)
+
+        self.momentum = self.config.momentum
+        self.learning_rate = self.config.learning_rate
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))
+
+    def learning_updates(self):
+        for param in self.network.weights + self.network.biases:
+            delta = self.learning_rate * T.grad(self.J, param)
+            velocity = theano.shared(
+                np.zeros_like(param.get_value()), name=param.name + '_vel')
+            yield velocity, self.momentum * velocity - delta
+            yield param, param + velocity
+
+
 
 
     # def train_minibatch(self, *x):
@@ -221,3 +222,68 @@ class SGDTrainer(NeuralTrainer):
     #         self.network.updating_callback()
     #     costs = self.learning_func(*x)
     #     return costs
+
+
+class AdaDeltaTrainer(NeuralTrainer):
+    '''AdaDelta network trainer.'''
+
+    def __init__(self, network, config=None):
+        """
+        Create a SGD trainer.
+        :type network:
+        :type config: nlpy.deep.conf.TrainerConfig
+        :return:
+        """
+        super(AdaDeltaTrainer, self).__init__(network, config)
+
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))
+
+    def learning_updates(self):
+        params = self.network.weights + self.network.biases
+        gparams = [T.grad(self.J, param) for param in params]
+        return optimize_parameters(params, gparams, method="ADADELTA")
+
+
+class AdaGradTrainer(NeuralTrainer):
+    '''AdaDelta network trainer.'''
+
+    def __init__(self, network, config=None):
+        """
+        Create a SGD trainer.
+        :type network:
+        :type config: nlpy.deep.conf.TrainerConfig
+        :return:
+        """
+        super(AdaGradTrainer, self).__init__(network, config)
+
+        self.learning_rate = self.config.learning_rate
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))
+
+    def learning_updates(self):
+        params = self.network.weights + self.network.biases
+        gparams = [T.grad(self.J, param) for param in params]
+        return optimize_parameters(params, gparams, method="ADAGRAD", lr=self.learning_rate)

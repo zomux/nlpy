@@ -9,11 +9,13 @@ import sys
 import numpy as np
 import math
 from progressbar import ProgressBar
+import random
 
 class RNNDataGenerator(object):
 
 
-    def __init__(self, vocab, data_path, history_len, batch_size = 1, overlap=False, progress=False, fixed_length=True, target_vector=False, _just_test=False):
+    def __init__(self, vocab, data_path, history_len, batch_size = 1, overlap=False, progress=False, fixed_length=True,
+                 target_vector=False, _just_test=False, shuffle=True):
         """
         Generate data for training with RNN
         :type vocab: nlpy.lm.Vocab
@@ -31,6 +33,7 @@ class RNNDataGenerator(object):
         self.fixed_length = fixed_length
         self.progress = progress
         self.overlap = overlap
+        self.shuffle = shuffle
 
         self.sentences = []
 
@@ -49,7 +52,12 @@ class RNNDataGenerator(object):
 
         trunk_size = self.history_len + 1
 
-        for sent_i in xrange(len(self.sentences)):
+        index_sequence = range(len(self.sentences))
+        if self.shuffle:
+            random.shuffle(index_sequence)
+
+        for j in xrange(len(index_sequence)):
+            sent_i = index_sequence[j]
             sent = self.sentences[sent_i]
 
             if self.history_len == -1:
@@ -84,11 +92,11 @@ class RNNDataGenerator(object):
                     y = y_indexs
                 yield (x, y)
 
-                if self._just_test and sent_i > 100:
+                if self._just_test and j > 100:
                     break
 
             if self.progress:
-                progress.update(sent_i)
+                progress.update(j)
 
         if self.progress:
             # progress.finish()

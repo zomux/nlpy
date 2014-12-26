@@ -32,8 +32,10 @@ class NeuralNetwork(object):
         self.hiddens = []
         self.weights = []
         self.biases = []
+        self.learning_updates = []
         self.updates = []
         self.inputs = []
+        self.target_inputs = []
         self.special_params = []
         self.special_monitors = []
         self.updating_callbacks = []
@@ -79,6 +81,7 @@ class NeuralNetwork(object):
             self.special_params.extend(layer.params)
             self.special_monitors.extend(layer.monitors)
             self.updates.extend(layer.updates)
+            self.learning_updates.extend(layer.learning_updates)
             self.inputs.extend(layer.inputs)
             if 'updating_callback' in dir(layer):
                 self.updating_callbacks.append(layer.updating_callback)
@@ -101,7 +104,8 @@ class NeuralNetwork(object):
     def _compile(self):
         if getattr(self, '_compute', None) is None:
             self._compute = theano.function(
-                [self.vars.x], self.hiddens + [self.vars.y], updates=self.updates, allow_input_downcast=True)
+                [x for x in self.inputs if x not in self.target_inputs],
+                self.hiddens + [self.vars.y], updates=self.updates, allow_input_downcast=True)
 
     @property
     def params(self):
@@ -116,12 +120,12 @@ class NeuralNetwork(object):
     def set_params(self, params):
         self.weights, self.biases = params
 
-    def feed_forward(self, x):
+    def feed_forward(self, *x):
         self._compile()
-        return self._compute(x)
+        return self._compute(*x)
 
-    def predict(self, x):
-        return self.feed_forward(x)[-1]
+    def predict(self, *x):
+        return self.feed_forward(*x)[-1]
 
     __call__ = predict
 
@@ -157,3 +161,6 @@ class NeuralNetwork(object):
             logging.info('%s: setting value %s', target.name, source.shape)
             target.set_value(source)
         handle.close()
+
+    def iteration_callback(self):
+        pass
