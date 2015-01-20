@@ -20,10 +20,11 @@ class NeuralClassifier(NeuralNetwork):
         # for a classifier, k specifies the correct labels for a given input.
         self.vars.k = T.ivector('k')
         self.inputs.append(self.vars.k)
+        self.target_inputs.append(self.vars.k)
 
     @staticmethod
     def _cost_func(self):
-        return -T.mean(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
+            return -T.mean(T.log(self.vars.y)[T.arange(self.vars.k.shape[0]), self.vars.k])
 
     @staticmethod
     def _error_func(self):

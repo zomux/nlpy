@@ -18,6 +18,8 @@ class TrainerConfig(object):
         self.learning_rate = 1e-4
 
         # Regularization
+        self.update_l1 = 0
+        self.update_l2 = 0
         self.weight_l1 = 0
         self.weight_l2 = 0
         self.hidden_l1 = 0

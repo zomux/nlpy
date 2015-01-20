@@ -5,13 +5,12 @@
 # Licensed under the GNU LGPL v2.1 - http://www.gnu.org/licenses/lgpl.html
 
 
-
-import unittest
 import time, os, sys
 from nlpy.lm import Vocab
 from nlpy.lm.data_generator import RNNDataGenerator
 from nlpy.util import internal_resource
 
+import numpy as np
 from nlpy.deep import NetworkConfig, TrainerConfig, NeuralClassifier, SGDTrainer, AdaDeltaTrainer, AdaGradTrainer
 from nlpy.deep.functions import FLOATX, monitor_var_sum as MVS, plot_hinton, \
     make_float_vectors, replace_graph as RG, monitor_var as MV, \
@@ -22,6 +21,7 @@ from nlpy.deep.networks.classifier_runner import NeuralClassifierRunner
 from nlpy.util import LineIterator, FakeGenerator
 from nlpy.deep import nnprocessors
 from nlpy.deep.trainers.optimize import optimize_parameters
+from nlpy.deep.trainers.minibatch_optimizer import MiniBatchOptimizer
 from collections import Counter
 import copy
 import numpy as np
@@ -41,21 +41,26 @@ Paraphrase RAE Implementation
 """
 class TreeRAELayer(NeuralLayer):
 
-    def __init__(self, size, target_size=-1, activation='tanh', noise=0., dropouts=0., beta=0.0000001,
-                 optimization="ADAGRAD", unfolding=True, additional_h=False, max_reg=4):
+    def __init__(self, size, activation='tanh', noise=0., dropouts=0., beta=0.,
+                 optimization="ADAGRAD", unfolding=True, additional_h=False, max_reg=4, deep=False, batch_size=10,
+                 realtime_update=True):
         """
         Recursive autoencoder layer follows the path of a given parse tree.
         Manually accumulate gradients.
         """
         super(TreeRAELayer, self).__init__(size, activation, noise, dropouts)
-        self.learning_rate = 0.1
+        self.learning_rate = 0.01
         self.disable_bias = True
-        self.target_size = target_size
         self.optimization = optimization
         self.beta = beta
         self.unfolding = unfolding
         self.additional_h = additional_h
         self.max_reg = max_reg
+        self.deep = deep
+        self.batch_size = batch_size
+        self.realtime_update = realtime_update
+        self.encode_optimizer = MiniBatchOptimizer(batch_size=self.batch_size, realtime=realtime_update)
+        self.decode_optimizer = MiniBatchOptimizer(batch_size=self.batch_size, realtime=realtime_update)
 
     def connect(self, config, vars, x, input_n, id="UNKNOWN"):
         """
@@ -73,27 +78,37 @@ class TreeRAELayer(NeuralLayer):
         self._setup_functions()
         self.connected = True
 
+    def updating_callback(self):
+        if not self.realtime_update:
+            self.encode_optimizer.run()
+            self.decode_optimizer.run()
+
     def _recursive_func(self):
         seq_len = self._vars.seq.shape[0]
         # Encoding
-        [reps, left_subreps, right_subreps, _, rep_gradients, distances], decoding_updates = theano.scan(self._recursive_step, sequences=[T.arange(seq_len)],
-                                           outputs_info=[None, None, None, self.init_registers, None, None],
+        [reps, inter_reps, left_subreps, right_subreps, _, rep_gradients, distances], decoding_updates = theano.scan(self._recursive_step, sequences=[T.arange(seq_len)],
+                                           outputs_info=[None, None, None, None, self.init_registers, None, None],
                                            non_sequences=[self.x, self._vars.seq, self._vars.back_routes, self._vars.back_lens])
         self.learning_updates.extend(decoding_updates.items())
         # Backpropagate through structure
-        [g_we1s, g_we2s, g_bes, _], _ = theano.scan(self._bpts_step,
+        [g_we1s, g_we2s, g_bes, g_wee, g_bee, _], _ = theano.scan(self._bpts_step,
                                                     sequences=[T.arange(seq_len - 1, -1, -1),],
-                                                    outputs_info=[None, None, None, self.init_registers],
-                                                    non_sequences=[self._vars.seq, reps, left_subreps, right_subreps,
+                                                    outputs_info=[None, None, None, None, None, self.init_registers],
+                                                    non_sequences=[self._vars.seq, reps, inter_reps, left_subreps, right_subreps,
                                                                    rep_gradients])
         # Encoding updates
-        encoding_updates = optimize_parameters([self.W_e1, self.W_e2, self.B_e],
-                                               [T.mean(g_we1s, axis=0), T.mean(g_we2s, axis=0), T.mean(g_bes, axis=0)],
-                                               method=self.optimization)
+        optimize_params = [self.W_e1, self.W_e2, self.B_e]
+        optimize_gradients = [T.sum(g_we1s, axis=0), T.sum(g_we2s, axis=0), T.sum(g_bes, axis=0)]
+        if self.deep:
+            optimize_params.extend([self.W_ee, self.B_ee])
+            optimize_gradients.extend([T.sum(g_wee, axis=0), T.sum(g_bee, axis=0)])
+
+        encoding_updates = self.encode_optimizer.setup(optimize_params, optimize_gradients, method=self.optimization,
+                                                beta=self.beta, count=seq_len)
         self.learning_updates.extend(encoding_updates)
         return reps[-1], T.sum(distances)
 
-    def _bpts_step(self, i, gradient_reg, seqs, reps, left_subreps, right_subreps, rep_gradients):
+    def _bpts_step(self, i, gradient_reg, seqs, reps, inter_reps, left_subreps, right_subreps, rep_gradients):
         seq = seqs[i]
         left, right, target = seq[0], seq[1], seq[2]
 
@@ -103,27 +118,53 @@ class TreeRAELayer(NeuralLayer):
         bpts_gradient = gradient_reg[target]
         rep_gradient = rep_gradients[i] + bpts_gradient
 
+        if self.deep:
+            # Implementation note:
+            # As the gradient of deep encoding func wrt W_ee includes the input representation.
+            # If we let T.grad to find that input representation directly, it will stuck in an infinite loop.
+            # So we must use SRG in this case.
+            _fake_input_rep, = make_float_vectors("_fake_input_rep")
+            deep_rep = self._deep_encode(_fake_input_rep)
+
+            node_map = {deep_rep: reps[i], _fake_input_rep: inter_reps[i]}
+
+            g_wee = SRG(T.grad(T.sum(deep_rep), self.W_ee), node_map) * rep_gradient
+            g_bee = SRG(T.grad(T.sum(deep_rep), self.B_ee), node_map) * rep_gradient
+            g_inter_rep = SRG(T.grad(T.sum(deep_rep), _fake_input_rep), node_map) * rep_gradient
+            inter_rep = inter_reps[i]
+
+        else:
+            g_wee = T.constant(0)
+            g_bee = T.constant(0)
+            g_inter_rep = rep_gradient
+            inter_rep = reps[i]
+
         # Accelerate computation by using saved internal values.
         # For the limitation of SRG, known_grads can not be used here.
         _fake_left_rep, _fake_right_rep = make_float_vectors("_fake_left_rep", "_fake_right_rep")
         rep_node = self._encode_computation(_fake_left_rep, _fake_right_rep)
+        if self.deep:
+            rep_node = self._deep_encode(rep_node)
 
-        node_map = {_fake_left_rep: left_subreps[i], _fake_right_rep: right_subreps[i], rep_node: reps[i]}
+        node_map = {_fake_left_rep: left_subreps[i], _fake_right_rep: right_subreps[i], rep_node: inter_rep}
 
-        g_we1 = SRG(T.grad(T.sum(rep_node), self.W_e1), node_map) * rep_gradient
-        g_we2 = SRG(T.grad(T.sum(rep_node), self.W_e2), node_map) * rep_gradient
-        g_be = SRG(T.grad(T.sum(rep_node), self.B_e), node_map) * rep_gradient
+        g_we1 = SRG(T.grad(T.sum(rep_node), self.W_e1), node_map) * g_inter_rep
+        g_we2 = SRG(T.grad(T.sum(rep_node), self.W_e2), node_map) * g_inter_rep
+        g_be = SRG(T.grad(T.sum(rep_node), self.B_e), node_map) * g_inter_rep
 
-        g_left_p = SRG(T.grad(T.sum(rep_node), _fake_left_rep), node_map) * rep_gradient
-        g_right_p = SRG(T.grad(T.sum(rep_node), _fake_right_rep), node_map) * rep_gradient
+        g_left_p = SRG(T.grad(T.sum(rep_node), _fake_left_rep), node_map) * g_inter_rep
+        g_right_p = SRG(T.grad(T.sum(rep_node), _fake_right_rep), node_map) * g_inter_rep
 
         gradient_reg = ifelse(left_is_token, gradient_reg, T.set_subtensor(gradient_reg[left], g_left_p))
         gradient_reg = ifelse(right_is_token, gradient_reg, T.set_subtensor(gradient_reg[right], g_right_p))
 
-        return g_we1, g_we2, g_be, gradient_reg
+        return g_we1, g_we2, g_be, g_wee, g_bee, gradient_reg
 
     def _encode_computation(self, left_rep, right_rep):
         return self._activation_func(T.dot(left_rep, self.W_e1) + T.dot(right_rep, self.W_e2) + self.B_e)
+
+    def _deep_encode(self, rep):
+        return self._activation_func(T.dot(rep, self.W_ee) + self.B_ee)
 
     def _recursive_step(self, i, regs, tokens, seqs, back_routes, back_lens):
         seq = seqs[i]
@@ -135,18 +176,24 @@ class TreeRAELayer(NeuralLayer):
 
         rep = self._encode_computation(left_rep, right_rep)
 
+        if self.deep:
+            inter_rep = rep
+            rep = self._deep_encode(inter_rep)
+        else:
+            inter_rep = T.constant(0)
+
+
         new_regs = T.set_subtensor(regs[target], rep)
 
         back_len = back_lens[i]
-
 
         back_reps, lefts, rights = self._unfold(back_routes[i], new_regs, back_len)
         gf_W_d1, gf_W_d2, gf_B_d1, gf_B_d2, distance, rep_gradient = self._unfold_gradients(back_reps, lefts, rights, back_routes[i],
                                                                     tokens, back_len)
 
-        return ([rep, left_rep, right_rep, new_regs, rep_gradient, distance],
-                optimize_parameters([self.W_d1, self.W_d2, self.B_d1, self.B_d2],
-                                    [gf_W_d1, gf_W_d2, gf_B_d1, gf_B_d2], method=self.optimization))
+        return ([rep, inter_rep, left_rep, right_rep, new_regs, rep_gradient, distance],
+                self.decode_optimizer.setup([self.W_d1, self.W_d2, self.B_d1, self.B_d2],
+                                    [gf_W_d1, gf_W_d2, gf_B_d1, gf_B_d2], method=self.optimization, beta=self.beta))
 
 
     def _unfold(self, back_route, regs, n, rep=None):
@@ -226,14 +273,35 @@ class TreeRAELayer(NeuralLayer):
 
 
     def encode_func(self):
-        return
-        # [reps, _], _ = theano.scan(self._recursive_step, sequences=[T.arange(start_index, self.x.shape[0])],
-        #                                    outputs_info=[h0, None], non_sequences=[self.x])
-        # return reps[-1]
+        seq_len = self._vars.seq.shape[0]
+        # Encoding
+        [reps, _], _ = theano.scan(self._encode_step, sequences=[T.arange(seq_len)],
+                                           outputs_info=[None, self.init_registers],
+                                           non_sequences=[self.x, self._vars.seq])
 
+        return reps
+
+
+    def _encode_step(self, i, regs, tokens, seqs):
+        seq = seqs[i]
+        # Encoding
+        left, right, target = seq[0], seq[1], seq[2]
+
+        left_rep = ifelse(T.lt(left, 0), tokens[-left], regs[left])
+        right_rep = ifelse(T.lt(right, 0), tokens[-right], regs[right])
+
+        rep = self._encode_computation(left_rep, right_rep)
+
+        if self.deep:
+            rep = self._deep_encode(rep)
+
+        new_regs = T.set_subtensor(regs[target], rep)
+
+        return rep, new_regs
 
     def decode_func(self):
-        return self._unfold(self._vars.p, self._vars.n)
+        # Not implemented
+        return T.sum(self._vars.p) + T.sum(self._vars.seq)
 
     def _setup_functions(self):
         self._assistive_params = []
@@ -246,10 +314,9 @@ class TreeRAELayer(NeuralLayer):
         self.monitors.append(("top_rep:mean", abs(top_rep).mean()))
 
     def _setup_params(self):
-        if self.target_size < 0:
-            self.target_size = self.input_n
-
-        self.W_e1 = self.create_weight(self.output_n, self.output_n, "enc1")
+        # In this implementation, all hidden layers, terminal nodes should have same vector size
+        assert self.input_n == self.output_n
+        self.W_e1 = self.create_weight(self.input_n, self.output_n, "enc1")
         self.W_e2 = self.create_weight(self.input_n, self.output_n, "enc2")
         self.B_e = self.create_bias(self.output_n, "enc")
 
@@ -271,6 +338,12 @@ class TreeRAELayer(NeuralLayer):
         self.B = []
         self.params = [self.W_e1, self.W_e2, self.B_e, self.W_d1, self.W_d2, self.B_d1, self.B_d2]
 
+        if self.deep:
+            # Set parameters for deep encoding layer
+            self.W_ee = self.create_weight(self.output_n, self.output_n, "deep_enc")
+            self.B_ee = self.create_bias(self.output_n, "deep_enc")
+            self.params.extend([self.W_ee, self.B_ee])
+
         self.init_registers = self.create_matrix(self.max_reg + 1, self.output_n, "init_regs")
         self.zero_rep = self.create_vector(self.output_n, "zero_rep")
 
@@ -285,6 +358,8 @@ class TreeRAELayer(NeuralLayer):
         # Just for decoding
         self._vars.n = T.iscalar("n")
         self._vars.p = T.vector("p", dtype=FLOATX)
+        self.encode_inputs = [self._vars.x, self._vars.seq]
+        self.decode_inputs = [self._vars.p, self._vars.seq]
 
 
 """
@@ -295,6 +370,8 @@ class ParaphraseDataBuilder(object):
     def __init__(self, path, max_reg=4):
         self.max_reg = max_reg
         self.data = pickle.load(open(path))
+        # random.shuffle(self.data)
+        # self.data = self.data[:10000]
         for d in self.data:
             d["back_lens"] = map(len, d["back_routes"])
         random.shuffle(self.data)
@@ -342,45 +419,63 @@ class ParaphraseDataBuilder(object):
     def valid_data(self):
         return FakeGenerator(self, "get_valid_data")
 
+def get_rae_network(model_path=""):
+    net_conf = NetworkConfig(input_size=300)
+    net_conf.layers = [TreeRAELayer(size=300)]
+
+    trainer_conf = TrainerConfig()
+    trainer_conf.learning_rate = 0.01
+    trainer_conf.weight_l2 = 0.0001
+    trainer_conf.hidden_l2 = 0.0001
+    trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
+
+    network = RecursiveAutoEncoder(net_conf)
+    if os.path.exists(model_path):
+        network.load_params(model_path)
+    return network
+
+if __name__ == '__main__':
+    builder = ParaphraseDataBuilder("/home/hadoop/data/paraphrase/rae_train_data2_samp.pkl")
+
+    train_data = builder.train_data()
+    valid_data = builder.valid_data()
+
+    """
+    Setup network
+    """
+    pretrain_model = "/home/hadoop/play/model_zoo/parahrase_rae_simple2.gz"
+    model_path = "/home/hadoop/play/model_zoo/parahrase_rae_pretrain1.gz"
+
+    net_conf = NetworkConfig(input_size=300)
+    net_conf.layers = [TreeRAELayer(size=300, deep=True, beta=0.00001, optimization="ADAGRAD",
+                                    batch_size=32, realtime_update=False)]
+
+    trainer_conf = TrainerConfig()
+    trainer_conf.learning_rate = 0.01
+    trainer_conf.weight_l2 = 0.0001
+    trainer_conf.hidden_l2 = 0.0001
+    trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
+
+    network = RecursiveAutoEncoder(net_conf)
+
+    trainer = SGDTrainer(network, config=trainer_conf)
+
+    """
+    Run the network
+    """
+    start_time = time.time()
+
+    # if os.path.exists(pretrain_model):
+    #     network.load_params(pretrain_model)
+    # elif os.path.exists(model_path):
+    #     network.load_params(model_path)
 
 
-builder = ParaphraseDataBuilder("/home/hadoop/data/paraphrase/rae_train_data.pkl")
+    for _ in trainer.train(train_data, valid_set=valid_data):
+        pass
 
-train_data = builder.train_data()
-valid_data = builder.valid_data()
+    end_time = time.time()
+    network.save_params(model_path)
 
-"""
-Setup network
-"""
-
-model_path = "/tmp/parahrase_rae2.gz"
-
-net_conf = NetworkConfig(input_size=300)
-net_conf.layers = [TreeRAELayer(size=300)]
-
-trainer_conf = TrainerConfig()
-trainer_conf.learning_rate = 0.01
-trainer_conf.weight_l2 = 0.0001
-trainer_conf.hidden_l2 = 0.0001
-trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
-
-network = RecursiveAutoEncoder(net_conf)
-
-trainer = SGDTrainer(network, config=trainer_conf)
-
-"""
-Run the network
-"""
-start_time = time.time()
-
-if os.path.exists(model_path):
-    network.load_params(model_path)
-
-for _ in trainer.train(train_data, valid_set=valid_data):
-    pass
-
-end_time = time.time()
-network.save_params(model_path)
-
-print "elapsed time:", (end_time - start_time) / 60, "mins"
+    print "elapsed time:", (end_time - start_time) / 60, "mins"
 

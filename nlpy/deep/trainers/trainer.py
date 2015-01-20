@@ -156,9 +156,12 @@ class NeuralTrainer(object):
                     break
 
             try:
-                costs = list(zip(
-                    self.cost_names,
-                    np.mean([self.learning_func(*x) for x in train_set], axis=0)))
+                cost_matrix = []
+                for x in train_set:
+                    cost_matrix.append(self.learning_func(*x))
+                    if self.network.needs_callback:
+                        self.network.updating_callback()
+                costs = list(zip(self.cost_names, np.mean(cost_matrix, axis=0)))
             except KeyboardInterrupt:
                 logging.info('interrupted!')
                 break
@@ -213,6 +216,38 @@ class SGDTrainer(NeuralTrainer):
                 np.zeros_like(param.get_value()), name=param.name + '_vel')
             yield velocity, self.momentum * velocity - delta
             yield param, param + velocity
+
+class PureSGDTrainer(NeuralTrainer):
+    '''Stochastic gradient descent network trainer.'''
+
+    def __init__(self, network, config=None):
+        """
+        Create a SGD trainer.
+        :type network:
+        :type config: nlpy.deep.conf.TrainerConfig
+        :return:
+        """
+        super(PureSGDTrainer, self).__init__(network, config)
+
+        self.learning_rate = self.config.learning_rate
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))
+
+    def learning_updates(self):
+        for param in self.network.weights + self.network.biases:
+            delta = self.learning_rate * T.grad(self.J, param)
+            yield param, param - delta
 
 
 
@@ -286,4 +321,32 @@ class AdaGradTrainer(NeuralTrainer):
     def learning_updates(self):
         params = self.network.weights + self.network.biases
         gparams = [T.grad(self.J, param) for param in params]
-        return optimize_parameters(params, gparams, method="ADAGRAD", lr=self.learning_rate)
+        return optimize_parameters(params, gparams, method="ADAGRAD", lr=self.learning_rate, beta=self.config.update_l1)
+
+class RmspropTrainer(SGDTrainer):
+    '''RmsProp trains neural network models using scaled SGD.
+    The Rprop method uses the same general strategy as SGD (both methods are
+    make small parameter adjustments using local derivative information). The
+    difference here is that as gradients are computed during each parameter
+    update, an exponential moving average of squared gradient magnitudes is
+    maintained as well. At each update, the EMA is used to compute the
+    root-mean-square (RMS) gradient value that's been seen in the recent past.
+    The actual gradient is normalized by this RMS scale before being applied to
+    update the parameters.
+    Like Rprop, this learning method effectively maintains a sort of
+    parameter-specific momentum value, but the difference here is that only the
+    magnitudes of the gradients are taken into account, rather than the signs.
+    The weight parameter for the EMA window is taken from the "momentum" keyword
+    argument. If this weight is set to a low value, the EMA will have a short
+    memory and will be prone to changing quickly. If the momentum parameter is
+    set close to 1, the EMA will have a long history and will change slowly.
+    '''
+
+    def learning_updates(self):
+        for param in self.params:
+            grad = T.grad(self.J, param)
+            rms_ = theano.shared(
+                np.zeros_like(param.get_value()), name=param.name + '_rms')
+            rms = self.momentum * rms_ + (1 - self.momentum) * grad * grad
+            yield rms_, rms
+            yield param, param - self.learning_rate * grad / T.sqrt(rms + 1e-8)

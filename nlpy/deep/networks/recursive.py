@@ -171,17 +171,25 @@ class RecursiveAutoEncoder(NeuralNetwork):
     def _compile(self):
         if not self._predict_compiled:
             rec_layer = self.layers[0]
-            self._encode_func = theano.function([self.vars.x], rec_layer.encode_func())
-            self._decode_func = theano.function([self.vars.p, self.vars.n], rec_layer.decode_func())
+            if hasattr(rec_layer, 'encode_inputs'):
+                encode_inputs = rec_layer.encode_inputs
+            else:
+                encode_inputs = [self.vars.x]
+            if hasattr(rec_layer, 'decode_inputs'):
+                decode_inputs = rec_layer.decode_inputs
+            else:
+                decode_inputs = [self.vars.p, self.vars.n]
+            self._encode_func = theano.function(encode_inputs, rec_layer.encode_func(), on_unused_input='warn')
+            self._decode_func = theano.function(decode_inputs, rec_layer.decode_func(), on_unused_input='warn')
             self._predict_compiled = True
 
-    def encode(self, x):
+    def encode(self, *x):
         self._compile()
-        return self._encode_func(x)
+        return self._encode_func(*x)
 
-    def decode(self, p, n):
+    def decode(self, *x):
         self._compile()
-        return self._decode_func(p, n)
+        return self._decode_func(*x)
 
 
 if __name__ == '__main__':

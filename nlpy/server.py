@@ -6,7 +6,9 @@
 
 from flask import Flask, request
 import json
+import urllib2
 app = Flask(__name__)
+from flask import make_response
 
 def import_class(name):
     mod = __import__(".".join(name.split(".")[:-1]))
@@ -65,9 +67,12 @@ def runner(class_name):
     for k in request.form:
         param[k] = request.form[k].encode('utf-8')
     for k in request.args:
-        param[k] = request.args[k].encode('utf-8')
+        param[k] = urllib2.unquote(request.args[k].encode('utf-8'))
 
-    return json.dumps(mod.serve(param))
+    result = json.dumps(mod.serve(param))
+    resp = make_response(result)
+    resp.headers['Access-Control-Allow-Origin'] = "*"
+    return resp
 
 if __name__ == '__main__':
     app.run(port=8077, debug=True, host="0.0.0.0")

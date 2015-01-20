@@ -178,7 +178,7 @@ class Scipy(NeuralTrainer):
         self.iterations = kwargs.get('num_updates', 100)
 
         logging.info('compiling gradient function')
-        self.f_grad = theano.function(network.inputs, TT.grad(self.J, self.params))
+        self.f_grad = theano.function(network.inputs, T.grad(self.J, self.params))
 
     def function_at(self, x, train_set):
         self.set_params(self.flat_to_arrays(x))
@@ -210,7 +210,7 @@ class Scipy(NeuralTrainer):
                 break
 
             try:
-                res = scipy.optimize.minimize(
+                res = scipy.run.minimize(
                     fun=self.function_at,
                     jac=self.gradient_at,
                     x0=self.arrays_to_flat(self.best_params),
@@ -397,13 +397,13 @@ class Layerwise(NeuralTrainer):
                 net.weights = [weights[i-1]]
                 net.biases = [biases[i-1]]
                 for j in range(i - 1, -1, -1):
-                    net.hiddens.append(TT.dot(net.hiddens[-1], weights[j].T))
+                    net.hiddens.append(T.dot(net.hiddens[-1], weights[j].T))
                 net.y = net._output_func(net.hiddens.pop())
             else:
                 W, b, _ = net.create_layer(nhids[i-1], nout, 'layerwise')
                 net.weights = [weights[i-1], W]
                 net.biases = [biases[i-1], b]
-                net.y = net._output_func(TT.dot(hiddens[i-1], W) + b)
+                net.y = net._output_func(T.dot(hiddens[i-1], W) + b)
             logging.info('layerwise: training weights %s', net.weights[0].name)
             trainer = self.factory(net, *self.args, **self.kwargs)
             for costs in trainer.train(train_set, valid_set):

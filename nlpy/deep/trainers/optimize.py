@@ -11,8 +11,8 @@ from collections import OrderedDict
 from nlpy.deep.functions import FLOATX
 
 
-def optimize_parameters(params, gparams, shapes=None, max_norm = 5.0, lr = 0.01, eps= 1e-6, rho=0.95, method="ADADELTA",
-                        beta=0.0):
+def optimize_parameters(params, gparams, shapes=None, max_norm = 15.0, lr = 0.01, eps= 1e-6, rho=0.95, method="ADADELTA",
+                        beta=0.0, gsum_regularization = 0, weight_l2 = 0, clip = True, monitor_norm = False):
     """
     Optimize by SGD, AdaGrad, or AdaDelta.
     Returns the shared variables for the gradient caches,
@@ -43,7 +43,6 @@ def optimize_parameters(params, gparams, shapes=None, max_norm = 5.0, lr = 0.01,
     oneMinusBeta = 1 - beta
 
 
-
     gsums   = [theano.shared(np.zeros_like(param.get_value(borrow=True), dtype=FLOATX), name="gsum_%s" % param.name) if (method == 'ADADELTA' or method == 'ADAGRAD') else None for param in shapes]
     xsums   = [theano.shared(np.zeros_like(param.get_value(borrow=True), dtype=FLOATX), name="xsum_%s" % param.name) if method == 'ADADELTA' else None for param in shapes]
 
@@ -56,9 +55,9 @@ def optimize_parameters(params, gparams, shapes=None, max_norm = 5.0, lr = 0.01,
 
     for gparam, param, gsum, xsum in zip(gparams, params, gsums, xsums):
         # clip gradients if they get too big
-        # if max_norm is not None and max_norm is not False:
-        #     grad_norm = gparam.norm(L=2)
-        #     gparam = (T.minimum(max_norm, grad_norm)/ grad_norm) * gparam
+        if max_norm and clip:
+            grad_norm = gparam.norm(L=1)
+            gparam = (T.minimum(T.constant(max_norm, dtype=FLOATX), grad_norm)/ grad_norm) * gparam
 
         if method == 'ADADELTA':
             updates[gsum] = rho * gsum + (1. - rho) * (gparam **2)
@@ -66,10 +65,11 @@ def optimize_parameters(params, gparams, shapes=None, max_norm = 5.0, lr = 0.01,
             updates[xsum] =rho * xsum + (1. - rho) * (dparam **2)
             updates[param] = param * oneMinusBeta + dparam
         elif method == 'ADAGRAD':
-            updates[gsum] =  gsum + (gparam ** 2)
-            updates[param] =  param * oneMinusBeta - lr * (gparam / (T.sqrt(updates[gsum] + eps)))
+            # updates[gsum] =  gsum + (gparam ** 2)
+            updates[gsum] = gsum + (gparam **2) - gsum_regularization * gsum
+            updates[param] =  param * oneMinusBeta - lr * (gparam / (T.sqrt(updates[gsum] + eps)) + (2 * weight_l2 * param))
         else:
-            updates[param] = param * oneMinusBeta - gparam * lr
+            updates[param] = param * oneMinusBeta - (gparam  + (2 * weight_l2 * param)) * lr
 
     return updates.items()
     #return updates, gsums, xsums, lr, max_norm

@@ -39,6 +39,7 @@ class NeuralNetwork(object):
         self.special_params = []
         self.special_monitors = []
         self.updating_callbacks = []
+        self.iteration_callbacks = []
 
 
         self.layers = config.layers
@@ -48,6 +49,7 @@ class NeuralNetwork(object):
 
         logging.info("total network parameters: %d", count)
         logging.info("network inputs: %s", " ".join(map(str, self.inputs)))
+        logging.info("network params: %s", " ".join(map(str, self.params)))
 
     def updating_callback(self):
         for cb in self.updating_callbacks:
@@ -85,6 +87,8 @@ class NeuralNetwork(object):
             self.inputs.extend(layer.inputs)
             if 'updating_callback' in dir(layer):
                 self.updating_callbacks.append(layer.updating_callback)
+            if 'iteration_callback' in dir(layer):
+                self.iteration_callbacks.append(layer.iteration_callback)
             z = layer.output_func
             last_size = size
         self.needs_callback = bool(self.updating_callbacks)
@@ -163,4 +167,5 @@ class NeuralNetwork(object):
         handle.close()
 
     def iteration_callback(self):
-        pass
+        for cb in self.iteration_callbacks:
+            cb()

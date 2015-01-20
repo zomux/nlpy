@@ -1,4 +1,4 @@
-from nlpy.syntax.cfg import StanfordCFGParser
+from nlpy.syntax.cfg import StanfordCFGParser, BatchStanfordCFGParser
 from nlpy.basic import DefaultTokenizer
 import sys, StringIO
 
@@ -12,7 +12,6 @@ class CFGSequencer(object):
         """
         Suppose there are two registers: c1, c2.
         Make sequence to combine all nodes in the tree, output to c2.
-        Multiple non-terminal children are not allowed.
         """
         # Depth-first iteration
         stack = [self.tree]
@@ -110,19 +109,39 @@ class CFGSequencer(object):
 
 if __name__ == '__main__':
 
-    parser = StanfordCFGParser()
     tokenizer = DefaultTokenizer()
-    testcase = "A tropical storm rapidly developed in the Gulf of Mexico Sunday and was expected to hit somewhere along the Texas or Louisiana coasts by Monday night."
+
+    sent_list = [x.strip() for x in sys.stdin.xreadlines()]
+    tok_list = [tokenizer.tokenize(x) for x in sent_list]
+
+    if len(sys.argv) == 2:
+        parser = BatchStanfordCFGParser()
+        parser.load_output(tok_list, sys.argv[1])
+    else:
+        parser = StanfordCFGParser()
+
+
+    testcase = "A discouraging outlook from General Electric Co. sent its share down 81 cents (U.S.) or 2.7 per cent to $29.32."
     #sys.stderr = StringIO.StringIO()
     reload(sys)
     sys.setdefaultencoding("utf-8")
 
     # tree = parser.parse(tokenizer.tokenize(testcase))
-    # list(CFGSequencer(tree))
+    # print tree
+    # print list(CFGSequencer(tree))
     # raise SystemExit
 
-    for l in sys.stdin.xreadlines():
+    for l in sent_list:
         tree = parser.parse(tokenizer.tokenize(l.strip()))
-        for x in CFGSequencer(tree):
+        if not tree:
+            print >> sys.stderr, "skip:", l
+            continue
+        seq = []
+        try:
+            seq = list(CFGSequencer(tree))
+        except:
+            print >> sys.stderr, "skip:", l
+            continue
+        for x in seq:
             print "_".join(map(str, x)),
         print ""
