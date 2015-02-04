@@ -11,11 +11,15 @@ import math
 from progressbar import ProgressBar
 import random
 
+import logging as loggers
+
+logging = loggers.getLogger(__name__)
+
 class RNNDataGenerator(object):
 
 
     def __init__(self, vocab, data_path, history_len, batch_size = 1, overlap=False, progress=False, fixed_length=True,
-                 target_vector=False, _just_test=False, shuffle=True):
+                 target_vector=False, _just_test=False, shuffle=True, max_words=999, min_words=0):
         """
         Generate data for training with RNN
         :type vocab: nlpy.lm.Vocab
@@ -40,10 +44,14 @@ class RNNDataGenerator(object):
         # Treat each sentence as a trunk
         for line in LineIterator(data_path):
             sequence = [vocab.sent_index]
+            wc = line.count(" ") + 1
+            if wc < min_words or wc > max_words:
+                continue
             for w in line.split(" "):
                 sequence.append(vocab.index(w))
             sequence.append(vocab.sent_index)
             self.sentences.append(sequence)
+        logging.info("%d sentences loaded from %s" % (len(self.sentences), data_path))
 
     def sequential_data(self):
 

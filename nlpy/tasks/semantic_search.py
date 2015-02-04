@@ -99,7 +99,7 @@ class SemanticSearcher(object):
             caches = set(urllib2.unquote(param["caches"]).split(" ||| "))
         print caches
         output = ""
-        for _, result in semantic_searcher.searchMany(param['input'].encode('utf-8')):
+        for _, result in semantic_searcher.searchMany(param['input'].convert('utf-8')):
             if result not in caches:
                 output = result
                 break

@@ -113,7 +113,7 @@ class BatchStanfordCFGParser(CFGParser):
         return res
 
     def _enc(self, string):
-        return string.encode("utf-8")
+        return string.convert("utf-8")
 
     def _build_tuples(self, subtree):
         is_terminal = len(subtree) == 1 and (type(subtree[0]) == unicode or type(subtree[0]) == str)

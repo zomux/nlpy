@@ -14,7 +14,7 @@ from nlpy.deep.functions import FLOATX, monitor_var_sum as MVS, plot_hinton, \
     make_float_vectors, replace_graph as RG, monitor_var as MV, \
     smart_replace_graph as SRG
 from nlpy.deep.networks import NeuralLayer
-from nlpy.deep.networks.recursive import RAELayer, RecursiveAutoEncoder
+from nlpy.deep.networks.recursive import RAELayer, GeneralAutoEncoder
 from nlpy.deep.networks.classifier_runner import NeuralClassifierRunner
 from nlpy.util import LineIterator, FakeGenerator
 from nlpy.deep import nnprocessors
@@ -68,7 +68,8 @@ class FeaturePreProcessor(object):
     def preprocess(self, data):
         sent1, sent2, label, input = data
         # Normalize
-        input = (input + (input > 10) * (10 - input)) / 10 - 0.5
+        # input = (input + (input > 10) * (10 - input)) / 10 - 0.5
+        input = (input - np.mean(input)) / np.sqrt(np.var(input))
         input = input.flatten()
         if self.num_features:
             input = np.concatenate([input.flatten(), np.array(self._get_num_feature(sent1, sent2))])
@@ -92,8 +93,8 @@ class ParaphraseClassifierDataBuilder(object):
         self._train_data = map(self.preprocessor.preprocess, self._raw_train_data)
         random.shuffle(self._train_data)
         valid_size = int(len(self._train_data) * 0.08)
-        self._valid_data = self._train_data[:valid_size]
-        self._train_data = self._train_data[valid_size:]
+        self._valid_data = map(self.preprocessor.preprocess, self._raw_test_data)#self._train_data[:valid_size]
+        self._train_data = self._train_data#[valid_size:]
         self._test_data = map(self.preprocessor.preprocess, self._raw_test_data)
         self.batch_size = batch_size
 
@@ -134,8 +135,8 @@ Softmax network
 
 def get_classify_network(path=None):
 
-    net_conf = NetworkConfig(input_size=228)
-    net_conf.layers = [NeuralLayer(size=300, activation='relu'), NeuralLayer(size=2, activation='softmax')]
+    net_conf = NetworkConfig(input_size=903)
+    net_conf.layers = [NeuralLayer(size=300, activation='tanh'), NeuralLayer(size=2, activation='softmax')]
 
     # net_conf.input_dropouts = 0.1
     # net_conf.input_noise = 0.05
@@ -151,12 +152,12 @@ def get_classify_network(path=None):
 
 
 if __name__ == '__main__':
-    builder = ParaphraseClassifierDataBuilder("/home/hadoop/data/paraphrase/mspr/train2.pkl.gz",
-                                              "/home/hadoop/data/paraphrase/mspr/test2.pkl.gz")
+    builder = ParaphraseClassifierDataBuilder("/home/hadoop/data/paraphrase/mspr/train3.pkl.gz",
+                                              "/home/hadoop/data/paraphrase/mspr/test3.pkl.gz")
     # builder = ParaphraseClassifierDataBuilder("/home/hadoop/data/paraphrase/data/bank_classify_train2.pkl.gz",
     #                                           "/home/hadoop/data/paraphrase/data/bank_classify_test2.pkl.gz")
 
-    model_path = "/home/hadoop/play/model_zoo/parahrase_classifier3.gz"
+    model_path = "/home/hadoop/play/model_zoo/parahrase_classifier4.gz"
     net = get_classify_network()
 
     if os.path.exists(model_path) and False:
@@ -169,7 +170,7 @@ if __name__ == '__main__':
     trainer_conf.hidden_l2 = 0.0001
     trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
 
-    trainer = AdaGradTrainer(net, config=trainer_conf)
+    trainer = AdaDeltaTrainer(net, config=trainer_conf)
 
     start_time = time.time()
 

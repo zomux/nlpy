@@ -17,7 +17,7 @@ logging = loggers.getLogger(__name__)
 
 class NeuralLayer(object):
 
-    def __init__(self, size, activation='sigmoid', noise=0., dropouts=0., shared_bias=None, disable_bias=True):
+    def __init__(self, size, activation='tanh', noise=0., dropouts=0., shared_bias=None, disable_bias=True):
         """
         Create a neural layer.
         :return:
@@ -75,7 +75,7 @@ class NeuralLayer(object):
         if self.disable_bias:
             self.B = []
 
-    def create_weight(self, input_n, output_n, suffix, sparse=None, scale=None):
+    def create_weight(self, input_n=1, output_n=1, suffix="", sparse=None, scale=None, shape=None):
         # ws = np.asarray(global_rand.uniform(low=-np.sqrt(6. / (input_n + output_n)),
         #                           high=np.sqrt(6. / (input_n + output_n)),
         #                           size=(input_n, output_n)))
@@ -84,24 +84,39 @@ class NeuralLayer(object):
         # if sparse is not None:
         #     ws *= np.random.binomial(n=1, p=sparse, size=(input_n, output_n))
 
+        adjust_weights = False
+        if not shape:
+            shape = (input_n, output_n)
+            adjust_weights = True
+
         if not scale:
-            scale = np.sqrt(6. / (input_n + output_n))
+            scale = np.sqrt(6. / sum(shape))
             if self.activation == 'sigmoid':
                 scale *= 4
-        ws = np.asarray(global_rand.uniform(low=-scale, high=scale, size=(input_n, output_n)))
+
+        ws = np.asarray(global_rand.uniform(low=-scale, high=scale, size=shape))
+
+        # Adjust weights
+        if adjust_weights:
+            norm = np.sqrt((ws**2).sum())
+            ws = scale * ws / norm
+            _, v, _ = np.linalg.svd(ws)
+            ws = scale * ws / v[0]
 
         weight = theano.shared(ws.astype(FLOATX), name='W_{}'.format(suffix))
 
-        self.param_count += input_n * output_n
-        logging.info('create weight W_%s: %d x %d', suffix, input_n, output_n)
+        self.param_count += np.prod(shape)
+        logging.info('create weight W_%s: %s', suffix, str(shape))
         return weight
 
-    def create_bias(self, output_n, suffix, value=0.):
-        bs =  np.ones(output_n)
+    def create_bias(self, output_n=1, suffix="", value=0., shape=None):
+        if not shape:
+            shape = (output_n, )
+        bs =  np.ones(shape)
         bs *= value
         bias = theano.shared(bs.astype(FLOATX), name='B_{}'.format(suffix))
-        self.param_count += output_n
-        logging.info('create bias B_%s: %d', suffix, output_n)
+        self.param_count += np.prod(shape)
+        logging.info('create bias B_%s: %s', suffix, str(shape))
         return bias
 
     def create_vector(self, n, name):

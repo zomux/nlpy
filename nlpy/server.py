@@ -54,7 +54,7 @@ def index():
     """
     return index.__doc__.replace("[host]", request.host)
 
-@app.route('/<path:class_name>', methods=['GET'])
+@app.route('/<path:class_name>', methods=['GET', 'POST'])
 def runner(class_name):
     try:
         mod = import_class(class_name)
@@ -65,9 +65,9 @@ def runner(class_name):
 
     param = {}
     for k in request.form:
-        param[k] = request.form[k].encode('utf-8')
+        param[k] = request.form[k].encode('utf-8', "i")
     for k in request.args:
-        param[k] = urllib2.unquote(request.args[k].encode('utf-8'))
+        param[k] = urllib2.unquote(request.args[k].encode('utf-8', "i"))
 
     result = json.dumps(mod.serve(param))
     resp = make_response(result)

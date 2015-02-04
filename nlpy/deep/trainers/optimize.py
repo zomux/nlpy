@@ -9,6 +9,9 @@ import theano.tensor as T
 import numpy as np
 from collections import OrderedDict
 from nlpy.deep.functions import FLOATX
+import inspect
+import logging as loggers
+logging = loggers.getLogger(__name__)
 
 
 def optimize_parameters(params, gparams, shapes=None, max_norm = 15.0, lr = 0.01, eps= 1e-6, rho=0.95, method="ADADELTA",
@@ -33,6 +36,14 @@ def optimize_parameters(params, gparams, shapes=None, max_norm = 15.0, lr = 0.01
     :returns lr: theano shared : learning rate
     :returns max_norm theano_shared : normalizing clipping value for excessive gradients (exploding)
     """
+
+    _, _, _, args = inspect.getargvalues(inspect.currentframe())
+    logging.info("optimize params: %s" % str(args.items()))
+
+    if method == "FINETUNING_ADAGRAD":
+        method = "ADAGRAD"
+        gsum_regularization = 0
+
     # lr = theano.shared(np.float64(lr).astype(FLOATX))
     if not shapes:
         shapes = params
@@ -60,6 +71,8 @@ def optimize_parameters(params, gparams, shapes=None, max_norm = 15.0, lr = 0.01
             gparam = (T.minimum(T.constant(max_norm, dtype=FLOATX), grad_norm)/ grad_norm) * gparam
 
         if method == 'ADADELTA':
+            if weight_l2 > 0:
+                gparam += (2 * weight_l2 * param)
             updates[gsum] = rho * gsum + (1. - rho) * (gparam **2)
             dparam = -T.sqrt((xsum + eps) / (updates[gsum] + eps)) * gparam
             updates[xsum] =rho * xsum + (1. - rho) * (dparam **2)

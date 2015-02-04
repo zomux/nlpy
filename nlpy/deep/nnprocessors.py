@@ -10,7 +10,7 @@ import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
-theano_rng = RandomStreams()
+theano_rng = RandomStreams(seed=3)
 
 
 def add_noise(x, sigma, rho):
@@ -26,7 +26,7 @@ def add_noise(x, sigma, rho):
     return x
 
 def softmax(x):
-    # TT.nnet.softmax doesn't work with the HF trainer.
+    # T.nnet.softmax doesn't work with the HF trainer.
     z = T.exp(x.T - x.T.max(axis=0))
     return (z / z.sum(axis=0)).T
 

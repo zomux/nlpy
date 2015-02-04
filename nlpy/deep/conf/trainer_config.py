@@ -12,7 +12,7 @@ class TrainerConfig(object):
         self.monitor_frequency = 50
 
         self.min_improvement = 0.
-        self.patience = 100
+        self.patience = 20
 
         self.momentum = 0.9
         self.learning_rate = 1e-4

@@ -18,14 +18,14 @@ logging = loggers.getLogger(__name__)
 
 class MiniBatchOptimizer(object):
 
-    def __init__(self, batch_size=32, realtime=True, constraint=True):
+    def __init__(self, batch_size=32, realtime=True, clip=True):
         self.batch_size = batch_size
         self.batch_counter = theano.shared(np.cast[FLOATX](0), "batch_counter")
         self.updates = []
         self.caches = []
         self._compiled = False
         self.realtime = realtime
-        self.constraint = constraint
+        self.clip = clip
 
 
     def setup(self, params, gparams, shapes=None, max_norm = 5.0, lr = 0.01, eps= 1e-6,
@@ -48,7 +48,7 @@ class MiniBatchOptimizer(object):
         gcache_mean = [g / self.batch_counter for g in gcache]
 
         optimize_updates = optimize_parameters(params, gcache_mean, shapes, max_norm, lr, eps, rho, method, beta,
-                                               gsum_regularization=0.0001, weight_l2 = 0, constraint=self.constraint)
+                                               gsum_regularization=0.0001, weight_l2 = weight_l2, clip=self.clip)
         self.updates.extend(optimize_updates)
         self.caches.extend(gcache)
 

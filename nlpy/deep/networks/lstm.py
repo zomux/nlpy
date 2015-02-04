@@ -32,7 +32,7 @@ class LSTMLayer(NeuralLayer):
         :return:
         """
         super(LSTMLayer, self).__init__(size, activation, noise, dropouts)
-        self.learning_rate = 0.1
+        self.learning_rate = 0.05
         self.weight_l2 = 0.0001
         self.update_h0 = update_h0
         self.disable_bias = True
@@ -63,14 +63,14 @@ class LSTMLayer(NeuralLayer):
 
     def _lstm_step(self, x_t, h_p, c_p):
 
-        i_t_preact = T.dot(x_t, self.W_xi) + T.dot(h_p, self.W_hi) + T.dot(c_p, self.W_ci) + self.B_i
+        i_t_preact = T.dot(x_t, self.W_xi) + T.dot(h_p, self.W_hi) + T.dot(c_p, self.W_ci)# + self.B_i
         i_t = self._sigmoid(i_t_preact)
-        f_t_preact = T.dot(x_t, self.W_xf) + T.dot(h_p, self.W_hf) + T.dot(c_p, self.W_cf) + self.B_f
+        f_t_preact = T.dot(x_t, self.W_xf) + T.dot(h_p, self.W_hf) + T.dot(c_p, self.W_cf)# + self.B_f
         f_t = self._sigmoid(f_t_preact)
-        c_t_preact = T.dot(x_t, self.W_xc) + T.dot(h_p, self.W_hc) + self.B_c
+        c_t_preact = T.dot(x_t, self.W_xc) + T.dot(h_p, self.W_hc)# + self.B_c
         tanh_c_t_right = self._tanh(c_t_preact)
         c_t = f_t * c_p + i_t * tanh_c_t_right
-        o_t_preact = T.dot(x_t, self.W_xo) + T.dot(h_p, self.W_ho) + T.dot(c_t, self.W_co) + self.B_o
+        o_t_preact = T.dot(x_t, self.W_xo) + T.dot(h_p, self.W_ho) + T.dot(c_t, self.W_co)# + self.B_o
         o_t = self._sigmoid(o_t_preact)
         tanh_c_t = self._tanh(c_t)
         h_t = o_t * tanh_c_t
@@ -130,8 +130,8 @@ class LSTMLayer(NeuralLayer):
         # Params:
         # self.W_xi,self.W_hi,self.W_ci,self.W_xf,self.W_hf,
         # self.W_cf,self.W_xc,self.W_hc,self.W_xo,self.W_ho,self.W_co,self.W_os
-        return g_h_p, g_c_p, g_wxi, g_whi, g_wci, g_wxf, g_whf, g_wcf, g_wxc, g_whc, g_wxo, g_who, g_wco, g_wos, \
-               g_bf, g_bi, g_bc, g_bo
+        return g_h_p, g_c_p, g_wxi, g_whi, g_wci, g_wxf, g_whf, g_wcf, g_wxc, g_whc, g_wxo, g_who, g_wco, g_wos# , \
+               # g_bf, g_bi, g_bc, g_bo
 
 
     def _build_gradient_func(self):
@@ -225,8 +225,8 @@ class LSTMLayer(NeuralLayer):
         # Update inside the recurrent steps
         self.W = []
         self.params = [self.W_xi,self.W_hi,self.W_ci,self.W_xf,self.W_hf,
-                       self.W_cf,self.W_xc,self.W_hc,self.W_xo,self.W_ho,self.W_co,self.W_os,
-                       self.B_f, self.B_i, self.B_c, self.B_o]
+                       self.W_cf,self.W_xc,self.W_hc,self.W_xo,self.W_ho,self.W_co,self.W_os]
+                       #self.B_f, self.B_i, self.B_c, self.B_o]
 
     def clear_hidden(self):
         self.h0.set_value(np.zeros((self.output_n,), dtype=FLOATX))

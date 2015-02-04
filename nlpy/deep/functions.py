@@ -13,7 +13,7 @@ import copy
 
 FLOATX = theano.config.floatX
 
-global_rand = np.random.RandomState()
+global_rand = np.random.RandomState(seed=3)
 
 
 def make_float_matrices(*names):

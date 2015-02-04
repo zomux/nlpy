@@ -19,7 +19,7 @@ class ParaphraseEncoder(object):
         self._parser = StanfordCFGParser() if not parser else parser
         self._tokenizer = DefaultTokenizer()
         self._recaser = DefaultRecaser()
-        self.pooling_size = 15
+        self.pooling_size = pooling_size
         self.regs_allowed = regs_allowed
 
     def encode(self, text, tokenized=False):
@@ -35,7 +35,7 @@ class ParaphraseEncoder(object):
             if max([x[2] for x in seq]) >= self.regs_allowed:
                 return None
             token_data, seq_data = self._build_data(seq)
-            return self._network.encode(token_data, seq_data)
+            return self._network.convert(token_data, seq_data)
 
     def _build_data(self, seq):
         tokens = []

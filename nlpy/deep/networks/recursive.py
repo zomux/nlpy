@@ -147,14 +147,14 @@ class RAELayer(NeuralLayer):
         self._vars.p = T.vector("p", dtype=FLOATX)
 
 
-class RecursiveAutoEncoder(NeuralNetwork):
+class GeneralAutoEncoder(NeuralNetwork):
 
     def __init__(self, config):
-        super(RecursiveAutoEncoder, self).__init__(config)
+        super(GeneralAutoEncoder, self).__init__(config)
         self._predict_compiled = False
 
     def setup_vars(self):
-        super(RecursiveAutoEncoder, self).setup_vars()
+        super(GeneralAutoEncoder, self).setup_vars()
 
         # for a classifier, k specifies the correct labels for a given input.
         # No additional parameters

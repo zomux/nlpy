@@ -250,25 +250,7 @@ class LM(NeuralTrainer):
 #     URL = 'https://raw.github.com/boulanni/theano-hf/master/hf.py'
 #
 #     def __init__(self, network, **kwargs):
-#         import os, tempfile
-#         try:
-#             import urllib.request
-#         except: # Python 2.x
-#             import urllib
-#         sys.path.append(tempfile.gettempdir())
-#
-#         try:
-#             import hf
-#         except:
-#             # if hf failed to import, try downloading it and saving it locally.
-#             logging.error('hf import failed, attempting to download %s', HF.URL)
-#             path = os.path.join(tempfile.gettempdir(), 'hf.py')
-#             try:
-#                 urllib.request.urlretrieve(HF.URL, path)
-#             except: # Python 2.x
-#                 urllib.urlretrieve(HF.URL, path)
-#             logging.info('downloaded hf code to %s', path)
-#             import hf
+#         import hf
 #
 #         self.params = network.params(**kwargs)
 #         self.opt = hf.hf_optimizer(

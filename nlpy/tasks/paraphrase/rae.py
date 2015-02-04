@@ -16,7 +16,7 @@ from nlpy.deep.functions import FLOATX, monitor_var_sum as MVS, plot_hinton, \
     make_float_vectors, replace_graph as RG, monitor_var as MV, \
     smart_replace_graph as SRG
 from nlpy.deep.networks import NeuralLayer
-from nlpy.deep.networks.recursive import RAELayer, RecursiveAutoEncoder
+from nlpy.deep.networks.recursive import RAELayer, GeneralAutoEncoder
 from nlpy.deep.networks.classifier_runner import NeuralClassifierRunner
 from nlpy.util import LineIterator, FakeGenerator
 from nlpy.deep import nnprocessors
@@ -109,6 +109,7 @@ class TreeRAELayer(NeuralLayer):
         return reps[-1], T.sum(distances)
 
     def _bpts_step(self, i, gradient_reg, seqs, reps, inter_reps, left_subreps, right_subreps, rep_gradients):
+        # BPTS
         seq = seqs[i]
         left, right, target = seq[0], seq[1], seq[2]
 
@@ -314,14 +315,17 @@ class TreeRAELayer(NeuralLayer):
         self.monitors.append(("top_rep:mean", abs(top_rep).mean()))
 
     def _setup_params(self):
+
+        weight_scale = None
+
         # In this implementation, all hidden layers, terminal nodes should have same vector size
         assert self.input_n == self.output_n
-        self.W_e1 = self.create_weight(self.input_n, self.output_n, "enc1")
-        self.W_e2 = self.create_weight(self.input_n, self.output_n, "enc2")
+        self.W_e1 = self.create_weight(self.input_n, self.output_n, "enc1", scale=weight_scale)
+        self.W_e2 = self.create_weight(self.input_n, self.output_n, "enc2", scale=weight_scale)
         self.B_e = self.create_bias(self.output_n, "enc")
 
-        self.W_d1 = self.create_weight(self.output_n, self.output_n, "dec1")
-        self.W_d2 = self.create_weight(self.output_n, self.input_n, "dec2")
+        self.W_d1 = self.create_weight(self.output_n, self.output_n, "dec1", scale=weight_scale)
+        self.W_d2 = self.create_weight(self.output_n, self.input_n, "dec2", scale=weight_scale)
         self.B_d1 = self.create_bias(self.output_n, "dec1")
         self.B_d2 = self.create_bias(self.input_n, "dec2")
 
@@ -340,7 +344,7 @@ class TreeRAELayer(NeuralLayer):
 
         if self.deep:
             # Set parameters for deep encoding layer
-            self.W_ee = self.create_weight(self.output_n, self.output_n, "deep_enc")
+            self.W_ee = self.create_weight(self.output_n, self.output_n, "deep_enc", scale=weight_scale)
             self.B_ee = self.create_bias(self.output_n, "deep_enc")
             self.params.extend([self.W_ee, self.B_ee])
 
@@ -367,17 +371,21 @@ RAE data loader
 """
 class ParaphraseDataBuilder(object):
 
-    def __init__(self, path, max_reg=4):
+    def __init__(self, path, max_reg=4, make_valid_data=False):
         self.max_reg = max_reg
         self.data = pickle.load(open(path))
         # random.shuffle(self.data)
         # self.data = self.data[:10000]
         for d in self.data:
             d["back_lens"] = map(len, d["back_routes"])
-        random.shuffle(self.data)
-        train_size = int(len(self.data)*0.9)
-        self._train_data = self.data[:train_size]
-        self._valid_data = self.data[train_size:]
+        if make_valid_data:
+            random.shuffle(self.data)
+            train_size = int(len(self.data)*0.9)
+            self._train_data = self.data[:train_size]
+            self._valid_data = self.data[train_size:]
+        else:
+            self._train_data = self.data
+            self._valid_data = []
 
     def _pad_routes(self, data):
         pad_item = (0,0,0)
@@ -429,26 +437,34 @@ def get_rae_network(model_path=""):
     trainer_conf.hidden_l2 = 0.0001
     trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
 
-    network = RecursiveAutoEncoder(net_conf)
+    network = GeneralAutoEncoder(net_conf)
     if os.path.exists(model_path):
         network.load_params(model_path)
     return network
 
 if __name__ == '__main__':
-    builder = ParaphraseDataBuilder("/home/hadoop/data/paraphrase/rae_train_data2_samp.pkl")
 
-    train_data = builder.train_data()
-    valid_data = builder.valid_data()
+    from argparse import ArgumentParser
+    ap = ArgumentParser()
+    ap.add_argument("data")
+    ap.add_argument("premodel")
+    ap.add_argument("model")
+    args = ap.parse_args()
+
+    print "[ARGS]", args
+
+    train_data = ParaphraseDataBuilder(args.data).train_data()
+    valid_data = ParaphraseDataBuilder("/home/hadoop/data/paraphrase/rae_valid_data2_samp.pkl").train_data()
 
     """
     Setup network
     """
-    pretrain_model = "/home/hadoop/play/model_zoo/parahrase_rae_simple2.gz"
-    model_path = "/home/hadoop/play/model_zoo/parahrase_rae_pretrain1.gz"
+    pretrain_model = args.premodel
+    model_path = args.model
 
     net_conf = NetworkConfig(input_size=300)
-    net_conf.layers = [TreeRAELayer(size=300, deep=True, beta=0.00001, optimization="ADAGRAD",
-                                    batch_size=32, realtime_update=False)]
+    net_conf.layers = [TreeRAELayer(size=300, deep=True, beta=0.00001, optimization="FINETUNING_ADAGRAD",
+                                    batch_size=10, realtime_update=False)]
 
     trainer_conf = TrainerConfig()
     trainer_conf.learning_rate = 0.01
@@ -456,7 +472,7 @@ if __name__ == '__main__':
     trainer_conf.hidden_l2 = 0.0001
     trainer_conf.monitor_frequency = trainer_conf.validation_frequency = trainer_conf.test_frequency = 1
 
-    network = RecursiveAutoEncoder(net_conf)
+    network = GeneralAutoEncoder(net_conf)
 
     trainer = SGDTrainer(network, config=trainer_conf)
 
@@ -465,13 +481,16 @@ if __name__ == '__main__':
     """
     start_time = time.time()
 
-    # if os.path.exists(pretrain_model):
-    #     network.load_params(pretrain_model)
+    if os.path.exists(pretrain_model):
+        network.load_params(pretrain_model)
     # elif os.path.exists(model_path):
     #     network.load_params(model_path)
 
-
+    c = 0
     for _ in trainer.train(train_data, valid_set=valid_data):
+        c += 1
+        if c > 20:
+           pass
         pass
 
     end_time = time.time()
