@@ -50,10 +50,12 @@ setup(
     setup_requires = [
         'numpy >= 1.3',
         'gensim >= 0.10.0'
+        'theano >= 0.6.0'
     ],
     install_requires=[
         'numpy >= 1.3',
         'gensim >= 0.10.0'
+        'theano >= 0.6.0'
     ],
 
     extras_require={
