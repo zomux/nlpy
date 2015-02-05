@@ -18,7 +18,7 @@ setup(
     description='Natural Language Processing on Python',
 
     author='Raphael Shu',
-    author_email='raphael1@uaca.com',
+    author_email='raphael@uaca.com',
 
     url='http://nlpy.org',
     download_url='http://pypi.python.org/pypi/nlpy',
@@ -54,7 +54,7 @@ setup(
     ],
     install_requires=[
         'numpy >= 1.3',
-        'gensim >= 0.10.0'
+        'gensim >= 0.10.0',
         'theano >= 0.6.0'
     ],
 
