@@ -7,7 +7,6 @@
 from nlpy.util import internal_resource, LineIterator
 from nltk_tokenizers import NLTKEnglishTokenizer
 from collections import Counter
-import math
 
 _FREQ_DATA_PATH = internal_resource("general/en_us_with_coca_1m_bigram_words.txt")
 _MASSIVE_WORD_LIST = internal_resource("general/ms_top_100k_words.txt")

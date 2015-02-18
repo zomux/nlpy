@@ -14,7 +14,7 @@ import logging as loggers
 logging = loggers.getLogger(__name__)
 
 
-def optimize_parameters(params, gparams, shapes=None, max_norm = 15.0, lr = 0.01, eps= 1e-6, rho=0.95, method="ADADELTA",
+def optimize_parameters(params, gparams, shapes=None, max_norm = 5.0, lr = 0.01, eps= 1e-6, rho=0.95, method="ADADELTA",
                         beta=0.0, gsum_regularization = 0, weight_l2 = 0, clip = True, monitor_norm = False):
     """
     Optimize by SGD, AdaGrad, or AdaDelta.
@@ -67,7 +67,7 @@ def optimize_parameters(params, gparams, shapes=None, max_norm = 15.0, lr = 0.01
     for gparam, param, gsum, xsum in zip(gparams, params, gsums, xsums):
         # clip gradients if they get too big
         if max_norm and clip:
-            grad_norm = gparam.norm(L=1)
+            grad_norm = gparam.norm(L=2)
             gparam = (T.minimum(T.constant(max_norm, dtype=FLOATX), grad_norm)/ grad_norm) * gparam
 
         if method == 'ADADELTA':

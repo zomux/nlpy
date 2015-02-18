@@ -7,8 +7,10 @@
 from flask import Flask, request
 import json
 import urllib2
-app = Flask(__name__)
+import os
+from argparse import ArgumentParser
 from flask import make_response
+app = Flask(__name__)
 
 def import_class(name):
     mod = __import__(".".join(name.split(".")[:-1]))
@@ -74,7 +76,36 @@ def runner(class_name):
     resp.headers['Access-Control-Allow-Origin'] = "*"
     return resp
 
+def preload():
+    if os.path.exists(".nlpyserverload"):
+        with open(".nlpyserverload") as fpreload:
+            for l in fpreload.xreadlines():
+                class_name = l.strip()
+                if not class_name: continue
+
+                try:
+                    mod = import_class(class_name)
+                except AttributeError:
+                    raise Exception("Error: %s can not be found" % class_name)
+                except ImportError:
+                    raise Exception("Error: %s can not be found" % class_name)
+
+                if "load" not in dir(mod):
+                    raise Exception("Error: %s do not have static method 'load'" % class_name)
+
+                mod.load()
+
 if __name__ == '__main__':
-    app.run(port=8077, debug=True, host="0.0.0.0")
+
+    ap = ArgumentParser(__name__)
+    ap.add_argument("--port", type=int, default=8077)
+    ap.add_argument("--debug", type=bool, default=True)
+    args = ap.parse_args()
+
+    # Pre-load
+    preload()
+
+    # Run server instance
+    app.run(port=args.port, debug=args.debug, host="0.0.0.0")
 
 

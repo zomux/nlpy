@@ -294,7 +294,7 @@ class AdaDeltaTrainer(NeuralTrainer):
 class AdaGradTrainer(NeuralTrainer):
     '''AdaDelta network trainer.'''
 
-    def __init__(self, network, config=None):
+    def __init__(self, network, config=None, gsum_regularization=0.0001):
         """
         Create a SGD trainer.
         :type network:
@@ -304,6 +304,7 @@ class AdaGradTrainer(NeuralTrainer):
         super(AdaGradTrainer, self).__init__(network, config)
 
         self.learning_rate = self.config.learning_rate
+        self.gsum_regularization = gsum_regularization
 
         logging.info('compiling %s learning function', self.__class__.__name__)
 
@@ -321,7 +322,19 @@ class AdaGradTrainer(NeuralTrainer):
     def learning_updates(self):
         params = self.network.weights + self.network.biases
         gparams = [T.grad(self.J, param) for param in params]
-        return optimize_parameters(params, gparams, method="ADAGRAD", lr=self.learning_rate, beta=self.config.update_l1)
+        return optimize_parameters(params, gparams, method="ADAGRAD", lr=self.learning_rate, beta=self.config.update_l1, gsum_regularization=self.gsum_regularization)
+
+class FineTuningAdaGradTrainer(AdaGradTrainer):
+    '''AdaDelta network trainer.'''
+
+    def __init__(self, network, config=None):
+        """
+        Create a SGD trainer.
+        :type network:
+        :type config: nlpy.deep.conf.TrainerConfig
+        :return:
+        """
+        super(FineTuningAdaGradTrainer, self).__init__(network, config, 0)
 
 class RmspropTrainer(SGDTrainer):
     '''RmsProp trains neural network models using scaled SGD.
