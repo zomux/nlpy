@@ -100,12 +100,13 @@ if __name__ == '__main__':
     ap = ArgumentParser(__name__)
     ap.add_argument("--port", type=int, default=8077)
     ap.add_argument("--debug", type=bool, default=True)
+    ap.add_argument("--reload", type=bool, default=False)
     args = ap.parse_args()
 
     # Pre-load
     preload()
 
     # Run server instance
-    app.run(port=args.port, debug=args.debug, host="0.0.0.0")
+    app.run(port=args.port, debug=args.debug, host="0.0.0.0", use_reloader=args.reload)
 
 

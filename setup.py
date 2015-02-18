@@ -36,7 +36,7 @@ resource_dir = os.path.join(os.path.dirname(__file__), 'nlpy', 'resources')
 
 setup(
     name='nlpy',
-    version='0.0.7',
+    version='0.0.9',
     description='Natural Language Processing on Python',
 
     author='Raphael Shu',
