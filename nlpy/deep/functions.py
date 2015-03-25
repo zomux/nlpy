@@ -170,3 +170,15 @@ def visual_hinton(val, max_val):
     if val < 0: colourstart, colourend = '\033[90m', '\033[0m'
     #bh.internal = colourstart + chars[step] + colourend
     return colourstart + chars[step] + colourend
+
+from theano.compile import ViewOp
+from theano.gradient import DisconnectedType
+
+class DisconnectedGrad(ViewOp):
+    def grad(self, args, g_outs):
+        return [ DisconnectedType()() for g_out in g_outs]
+
+    def connection_pattern(self, node):
+        return [[False]]
+
+disconnected_grad = DisconnectedGrad()

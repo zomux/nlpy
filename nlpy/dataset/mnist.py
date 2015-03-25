@@ -28,6 +28,9 @@ class MnistDataset(AbstractDataset):
             logging.info("downloading minst data")
             urllib.urlretrieve (MNIST_URL, path)
         self._train_set, self._valid_set, self._test_set = cPickle.load(gzip.open(path, 'rb'))
+        logging.info("[mnist] training data size: %d" % len(self._train_set[0]))
+        logging.info("[mnist] valid data size: %d" % len(self._valid_set[0]))
+        logging.info("[mnist] test data size: %d" % len(self._test_set[0]))
 
     def train_set(self):
         data, target = self._train_set

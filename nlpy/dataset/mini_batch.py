@@ -13,7 +13,7 @@ class MiniBatches(AbstractDataset):
         self.size = batch_size
 
     def _yield_data(self, data, targets):
-        for i in xrange(len(data)/self.size):
+        for i in xrange(0, len(data), self.size):
             yield data[i:i + self.size], targets[i:i + self.size]
 
     def train_set(self):

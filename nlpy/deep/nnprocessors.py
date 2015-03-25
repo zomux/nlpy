@@ -6,7 +6,6 @@
 
 from functions import global_rand, FLOATX
 import functools
-import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
@@ -44,7 +43,7 @@ def build_activation(act=None):
             'logistic': T.nnet.sigmoid,
             'sigmoid': T.nnet.sigmoid,
             'softplus': T.nnet.softplus,
-            'softmax': softmax,
+            'softmax': T.nnet.softmax,
 
             # shorthands
             'relu': lambda z: z * (z > 0),

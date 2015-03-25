@@ -85,4 +85,9 @@ def optimize_parameters(params, gparams, shapes=None, max_norm = 5.0, lr = 0.01,
             updates[param] = param * oneMinusBeta - (gparam  + (2 * weight_l2 * param)) * lr
 
     return updates.items()
-    #return updates, gsums, xsums, lr, max_norm
+    #return updates, gsums, xsums, lr, max_normjnn
+
+def gradient_interface(params, **kwargs):
+    gs = [T.matrix() if p.ndim == 2 else T.vector() for p in params]
+    updates = optimize_parameters(params, gs, **kwargs)
+    return theano.function(gs, [], updates=updates)

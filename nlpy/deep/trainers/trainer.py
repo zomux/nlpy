@@ -18,6 +18,8 @@ import sys
 import gzip
 import cPickle as pickle
 from optimize import optimize_parameters
+from theano.ifelse import ifelse
+from nlpy.deep.functions import FLOATX
 
 logging = loggers.getLogger(__name__)
 
@@ -250,13 +252,50 @@ class PureSGDTrainer(NeuralTrainer):
             yield param, param - delta
 
 
+class BatchPureSGDTrainer(NeuralTrainer):
+    """
+    Batch SGD Trainer
+    """
+
+    def __init__(self, network, config=None, batch_size=20):
+        """
+        Create a SGD trainer.
+        :type network:
+        :type config: nlpy.deep.conf.TrainerConfig
+        :return:
+        """
+        super(BatchPureSGDTrainer, self).__init__(network, config)
+
+        self.learning_rate = self.config.learning_rate
+        self.batch_size = batch_size
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))
 
 
-    # def train_minibatch(self, *x):
-    #     if self.network.needs_callback:
-    #         self.network.updating_callback()
-    #     costs = self.learning_func(*x)
-    #     return costs
+    def learning_updates(self):
+        batch_counter = theano.shared(np.array(0, dtype="int32"), "batch_counter")
+        batch_size = self.batch_size
+        to_update = batch_counter >= batch_size
+
+        for param in self.network.weights + self.network.biases:
+            # delta = self.learning_rate * T.grad(self.J, param)
+            gsum = theano.shared(np.zeros(param.get_value().shape, dtype=FLOATX), "batch_gsum_%s" % param.name)
+            yield gsum, ifelse(to_update, T.zeros_like(gsum), gsum + T.grad(self.J, param))
+            delta = self.learning_rate * gsum / batch_size
+            yield param, ifelse(to_update, param - delta, param)
+
+        yield batch_counter, ifelse(to_update, T.constant(0, dtype="int32"), batch_counter + 1)
 
 
 class AdaDeltaTrainer(NeuralTrainer):
@@ -337,23 +376,9 @@ class FineTuningAdaGradTrainer(AdaGradTrainer):
         super(FineTuningAdaGradTrainer, self).__init__(network, config, 0)
 
 class RmspropTrainer(SGDTrainer):
-    '''RmsProp trains neural network models using scaled SGD.
-    The Rprop method uses the same general strategy as SGD (both methods are
-    make small parameter adjustments using local derivative information). The
-    difference here is that as gradients are computed during each parameter
-    update, an exponential moving average of squared gradient magnitudes is
-    maintained as well. At each update, the EMA is used to compute the
-    root-mean-square (RMS) gradient value that's been seen in the recent past.
-    The actual gradient is normalized by this RMS scale before being applied to
-    update the parameters.
-    Like Rprop, this learning method effectively maintains a sort of
-    parameter-specific momentum value, but the difference here is that only the
-    magnitudes of the gradients are taken into account, rather than the signs.
-    The weight parameter for the EMA window is taken from the "momentum" keyword
-    argument. If this weight is set to a low value, the EMA will have a short
-    memory and will be prone to changing quickly. If the momentum parameter is
-    set close to 1, the EMA will have a long history and will change slowly.
-    '''
+    """
+    RmsProp
+    """
 
     def learning_updates(self):
         for param in self.params:
@@ -363,3 +388,127 @@ class RmspropTrainer(SGDTrainer):
             rms = self.momentum * rms_ + (1 - self.momentum) * grad * grad
             yield rms_, rms
             yield param, param - self.learning_rate * grad / T.sqrt(rms + 1e-8)
+
+
+class AdamTrainer(NeuralTrainer):
+    """
+    Optimization class of Adam.
+    """
+
+    def __init__(self, network, config=None):
+        super(AdamTrainer, self).__init__(network, config)
+
+        self.learning_rate = self.config.learning_rate
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))
+
+    def adam(self, loss, all_params, learning_rate=0.0002, beta1=0.1, beta2=0.001,
+         epsilon=1e-8, gamma=1-1e-8):
+        updates = []
+        all_grads = theano.grad(loss,all_params)
+
+        i = theano.shared(np.float32(1), name="adam_i")
+        i_t = i + 1.
+        fix1 = 1. - (1. - beta1)**i_t
+        fix2 = 1. - (1. - beta2)**i_t
+        beta1_t = 1-(1-beta1)*gamma**(i_t-1)
+        learning_rate_t = learning_rate * (T.sqrt(fix2) / fix1)
+
+        for param_i, g in zip(all_params, all_grads):
+            m = theano.shared(
+                np.zeros(param_i.get_value().shape, dtype=theano.config.floatX), name="adam_m_%s" % param_i.name)
+            v = theano.shared(
+                np.zeros(param_i.get_value().shape, dtype=theano.config.floatX), name="adam_v_%s" % param_i.name)
+
+            m_t = (beta1_t * g) + ((1. - beta1_t) * m)
+            v_t = (beta2 * g**2) + ((1. - beta2) * v)
+            g_t = m_t / (T.sqrt(v_t) + epsilon)
+            param_i_t = param_i - (learning_rate_t * g_t)
+
+            updates.append((m, m_t))
+            updates.append((v, v_t))
+            updates.append((param_i, param_i_t) )
+        updates.append((i, i_t))
+        return updates
+
+    def learning_updates(self):
+        return self.adam(self.J, self.network.weights + self.network.biases, learning_rate=self.learning_rate)
+
+class SSGD2Trainer(NeuralTrainer):
+    """
+    Optimization class of SSGD.
+    """
+
+    def __init__(self, network, config=None):
+        super(SSGD2Trainer, self).__init__(network, config)
+
+        self.learning_rate = self.config.learning_rate
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = list(self.learning_updates())
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))
+
+    def ssgd2(self, loss, all_params, learning_rate=0.01, chaos_energy=0.01, alpha=0.9):
+        from theano.tensor.shared_randomstreams import RandomStreams
+
+        chaos_energy = T.constant(chaos_energy, dtype="float32")
+        alpha = T.constant(alpha, dtype="float32")
+        learning_rate = T.constant(learning_rate, dtype="float32")
+
+        srng = RandomStreams(seed=3)
+        updates = []
+        all_grads = T.grad(loss, all_params)
+        for p, g in zip(all_params, all_grads):
+            rand_v = (srng.uniform(p.get_value().shape)*2 - 1) * chaos_energy
+            g_ratio_vec = g / g.norm(L=2)
+            ratio_sum = theano.shared(np.ones(np.array(p.get_value().shape), dtype="float32"), name="ssgd2_r_sum_%s" % p.name)
+            abs_ratio_sum = T.abs_(ratio_sum)
+            updates.append((ratio_sum, ratio_sum * alpha + (1 - alpha ) * g_ratio_vec))
+            updates.append((p, p - learning_rate*((abs_ratio_sum)*g + (1-abs_ratio_sum)*rand_v)))
+        return updates
+
+    def learning_updates(self):
+        return self.ssgd2(self.J, self.network.weights + self.network.biases, learning_rate=self.learning_rate)
+
+class FakeTrainer(NeuralTrainer):
+    """
+    Fake Trainer does nothing.
+    """
+
+    def __init__(self, network, config=None):
+        super(FakeTrainer, self).__init__(network, config)
+
+        self.learning_rate = self.config.learning_rate
+
+        logging.info('compiling %s learning function', self.__class__.__name__)
+
+        network_updates = list(network.updates) + list(network.learning_updates)
+        learning_updates = []
+        update_list = network_updates + learning_updates
+        logging.info("network updates: %s" % " ".join(map(str, [x[0] for x in network_updates])))
+        logging.info("learning updates: %s" % " ".join(map(str, [x[0] for x in learning_updates])))
+
+        self.learning_func = theano.function(
+            network.inputs,
+            self.cost_exprs,
+            updates=update_list, allow_input_downcast=True, mode=theano.Mode(linker=THEANO_LINKER))

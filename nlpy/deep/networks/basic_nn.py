@@ -136,17 +136,22 @@ class NeuralNetwork(object):
 
     def J(self, train_conf):
         cost = self.cost
-        if train_conf.weight_l1 > 0:
-            cost += train_conf.weight_l1 * sum(abs(w).sum() for w in self.weights)
+
+        # if train_conf.weight_l1 > 0:
+        #     cost += train_conf.weight_l1 * sum(abs(w).sum() for w in self.weights)
+
+        # if train_conf.hidden_l1 > 0:
+        #     cost += train_conf.hidden_l1 * sum(abs(h).mean(axis=0).sum() for h in self.hiddens)
         if train_conf.weight_l2 > 0:
+            logging.info("L2 weight regularization: %f" % train_conf.weight_l2)
             cost += train_conf.weight_l2 * sum((w * w).sum() for w in self.weights)
-        if train_conf.hidden_l1 > 0:
-            cost += train_conf.hidden_l1 * sum(abs(h).mean(axis=0).sum() for h in self.hiddens)
         if train_conf.hidden_l2 > 0:
+            logging.info("L2 hidden unit regularization: %f" % train_conf.hidden_l2)
             cost += train_conf.hidden_l2 * sum((h * h).mean(axis=0).sum() for h in self.hiddens)
-        if train_conf.contractive_l2 > 0:
-            cost += train_conf.contractive_l2 * sum(
-                T.sqr(T.grad(h.mean(axis=0).sum(), self.vars.x)).sum() for h in self.hiddens)
+        # if train_conf.contractive_l2 > 0:
+        #     cost += train_conf.contractive_l2 * sum(
+        #         T.sqr(T.grad(h.mean(axis=0).sum(), self.vars.x)).sum() for h in self.hiddens)
+
         return cost
 
     def save_params(self, path):

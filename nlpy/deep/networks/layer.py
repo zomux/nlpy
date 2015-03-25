@@ -119,9 +119,9 @@ class NeuralLayer(object):
         logging.info('create bias B_%s: %s', suffix, str(shape))
         return bias
 
-    def create_vector(self, n, name):
+    def create_vector(self, n, name, dtype=FLOATX):
         bs =  np.zeros(n)
-        v = theano.shared(bs.astype(FLOATX), name='{}'.format(name))
+        v = theano.shared(bs.astype(dtype), name='{}'.format(name))
 
         logging.info('create vector %s: %d', name, n)
         return v
